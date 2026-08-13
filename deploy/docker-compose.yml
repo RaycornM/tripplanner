@@ -1,0 +1,48 @@
+version: "3.9"
+
+# 旅行规划 TripPlanner - 绿联 DXP4800 Docker 部署配置
+# 用法：
+#   1. 在绿联共享文件夹里新建目录 tripplanner/
+#   2. 把 index.html、styles.css、js/ 目录上传到 tripplanner/www/
+#   3. 把本文件放到 tripplanner/docker-compose.yml
+#   4. 在 Docker 管理器中"导入 compose"或 SSH 执行 docker compose up -d
+
+services:
+  tripplanner:
+    image: nginx:1.27-alpine
+    container_name: tripplanner
+    restart: unless-stopped
+    ports:
+      # 【重要】要改端口只改冒号左边的数字，右边 80 不能动
+      - "8888:80"
+      # 如需 HTTPS，取消下面注释并把证书放到 nginx/certs/ 目录：
+      # - "8443:443"
+    volumes:
+      # 网站静态文件目录（只读，更安全）
+      - ./www:/usr/share/nginx/html:ro
+      # 自定义 Nginx 配置（启用 gzip / 缓存，可选）
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # 日志映射到宿主机，方便排查
+      - ./logs:/var/log/nginx
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      - tripplanner-net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    # Docker compose v2 + v3 通用的资源限制语法（不用 deploy，swarm 模式才要 deploy）
+    mem_limit: 128m
+    cpus: 0.5
+
+networks:
+  tripplanner-net:
+    driver: bridge
+
+# 说明：
+# - 修改 HTTP_PORT=8888 环境变量或直接改端口映射即可改访问端口
+# - 升级时：替换 www/ 里的文件 → 浏览器强制刷新（Ctrl+F5）即可，无需重启容器
+# - 备份：把整个 tripplanner/ 目录复制到别处即可完整备份

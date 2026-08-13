@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>旅行规划 · TripPlanner</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Leaflet 地图 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Chart.js 饼图 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- SortableJS 拖拽排序 -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <a href="#" class="logo" id="logo">
+        <span class="logo-icon">✈</span>
+        <span class="logo-text">TripPlanner</span>
+      </a>
+      <nav class="header-actions">
+        <button class="btn btn-ghost" id="exportBtn" title="导出备份">导出</button>
+        <label class="btn btn-ghost" title="导入备份">导入
+          <input type="file" id="importInput" accept="application/json" hidden />
+        </label>
+      </nav>
+    </div>
+  </header>
+
+  <main id="app" class="app-main"></main>
+
+  <!-- 模态框容器 -->
+  <div id="modalRoot"></div>
+  <!-- Toast 容器 -->
+  <div id="toastRoot" class="toast-root"></div>
+
+  <!-- 数据层 -->
+  <script src="js/data.js"></script>
+  <script src="js/templates.js"></script>
+  <!-- 应用逻辑 -->
+  <script src="js/app.js"></script>
+</body>
+</html>
