@@ -367,6 +367,104 @@
     return isNaN(n) ? 0 : n;
   }
 
+  // ---------- 证件提醒 ----------
+  // 证件数据结构：{ id, type:passport|idcard|visa|other, name, number, expiry, country, needVisa, note, photo }
+  function listDocuments(tripId) {
+    const trip = getTrip(tripId);
+    if (!trip) return [];
+    if (!trip.documents) trip.documents = [];
+    return trip.documents;
+  }
+  function addDocument(tripId, data) {
+    const trip = getTrip(tripId); if (!trip) return null;
+    if (!trip.documents) trip.documents = [];
+    const d = Object.assign({
+      id: uid('doc'),
+      type: 'passport',
+      name: '',
+      number: '',
+      expiry: '',
+      country: '',
+      needVisa: false,
+      visaNote: '',
+      note: '',
+      photo: '',
+      createdAt: Date.now()
+    }, data);
+    trip.documents.push(d); save(); return d;
+  }
+  function updateDocument(tripId, docId, patch) {
+    const trip = getTrip(tripId); if (!trip) return null;
+    if (!trip.documents) trip.documents = [];
+    const d = trip.documents.find(x => x.id === docId); if (!d) return null;
+    Object.assign(d, patch); save(); return d;
+  }
+  function deleteDocument(tripId, docId) {
+    const trip = getTrip(tripId); if (!trip) return false;
+    if (!trip.documents) return false;
+    const i = trip.documents.findIndex(x => x.id === docId);
+    if (i >= 0) { trip.documents.splice(i, 1); save(); return true; }
+    return false;
+  }
+  // 判断证件是否过期/即将过期（30 天内）
+  function docStatus(doc) {
+    if (!doc.expiry) return 'unknown';
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const exp = parseDate(doc.expiry);
+    if (!exp) return 'unknown';
+    const diff = (exp - today) / 86400000;
+    if (diff < 0) return 'expired';     // 已过期 红
+    if (diff <= 30) return 'soon';      // 30天内到期 橙
+    return 'valid';                     // 有效 绿
+  }
+
+  // ---------- 邀请码 & 操作日志 ----------
+  function ensureCollab(trip) {
+    if (!trip.collab) trip.collab = { inviteCode: genInviteCode(trip.id), logs: [] };
+    if (!trip.collab.inviteCode) trip.collab.inviteCode = genInviteCode(trip.id);
+    if (!trip.collab.logs) trip.collab.logs = [];
+    return trip.collab;
+  }
+  function genInviteCode(seed) {
+    // 4 位大写字母/数字
+    const src = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let n = 0; const s = (seed || '') + Date.now();
+    for (let i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0;
+    let out = '';
+    for (let i = 0; i < 4; i++) { out += src[(n + i * 7) % src.length]; n = (n * 1103515245 + 12345) >>> 0; }
+    return out;
+  }
+  function getInviteCode(tripId) {
+    const trip = getTrip(tripId); if (!trip) return '';
+    ensureCollab(trip); save(); return trip.collab.inviteCode;
+  }
+  function regenInviteCode(tripId) {
+    const trip = getTrip(tripId); if (!trip) return '';
+    ensureCollab(trip); trip.collab.inviteCode = genInviteCode(trip.id + Date.now());
+    save(); return trip.collab.inviteCode;
+  }
+  function setMemberRole(tripId, memberId, role) {
+    const trip = getTrip(tripId); if (!trip) return null;
+    const m = trip.members.find(x => x.id === memberId); if (!m) return null;
+    m.role = role || 'member'; // owner / editor / viewer / member
+    logAction(trip, { type: 'role', memberId, role: m.role });
+    save(); return m;
+  }
+  function logAction(trip, entry) {
+    ensureCollab(trip);
+    trip.collab.logs.unshift(Object.assign({
+      id: uid('log'),
+      time: Date.now(),
+      actor: '我'
+    }, entry));
+    if (trip.collab.logs.length > 50) trip.collab.logs.length = 50;
+    save();
+  }
+  function getLogs(tripId) {
+    const trip = getTrip(tripId); if (!trip) return [];
+    ensureCollab(trip); return trip.collab.logs.slice();
+  }
+
   // ---------- 导入导出 ----------
   function exportAll() {
     return JSON.stringify(state, null, 2);
@@ -419,6 +517,8 @@
     addChecklistItem, updateChecklistItem, deleteChecklistItem,
     addSplit, deleteSplit,
     estimateCost, perPersonEstimate, actualCostByCategory, actualTotal, computeSettlement,
+    listDocuments, addDocument, updateDocument, deleteDocument, docStatus,
+    getInviteCode, regenInviteCode, setMemberRole, logAction, getLogs,
     exportAll, importAll, createFromTemplate
   };
 

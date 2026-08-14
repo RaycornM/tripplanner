@@ -97,7 +97,7 @@
     const fab = $('#fab'); const tabBar = $('#tabBar');
     navLeft.innerHTML = ''; navRight.innerHTML = '';
     // 行程详情等子页：显示返回 + 隐藏 TabBar
-    const isSubPage = (route === 'trip' || route === 'templates');
+    const isSubPage = (route === 'trip' || route === 'templates' || route === 'design-system');
     if (isSubPage) {
       tabBar.style.display = 'none';
       fab.style.display = 'none';
@@ -117,7 +117,7 @@
     // NavBar 标题与右侧操作
     const titles = {
       home: '', checklist: '出行清单', cost: '花费统计', me: '我的',
-      templates: '行程模板', trip: ''
+      templates: '行程模板', trip: '', 'design-system': '设计系统'
     };
     navTitle.textContent = titles[route] || '';
     // 首页右侧：导入导出隐藏到「我的」，首页留新建快捷
@@ -153,6 +153,7 @@
     else if (route === 'checklist') renderChecklistHub(app);
     else if (route === 'cost') renderCostHub(app);
     else if (route === 'me') renderMe(app);
+    else if (route === 'design-system') renderDesignSystem(app);
     else renderHome(app);
   }
   window.addEventListener('hashchange', render);
@@ -190,7 +191,7 @@
     const c = el('div', { class: 'empty-state' },
       el('span', { class: 'em-ic' }, icon),
       el('div', { class: 'em-title' }, title),
-      el('div', { class: 'em-sub' }, sub)
+      sub ? el('div', { class: 'em-sub' }, sub) : null
     );
     if (actions && actions.length) {
       const w = el('div', { style: 'display:flex;gap:8px;justify-content:center;' });
@@ -198,6 +199,45 @@
       c.appendChild(w);
     }
     return c;
+  }
+
+  // 加载态：统一插画 + 文案
+  function loadingState(text) {
+    return el('div', { class: 'loading-state' },
+      el('div', { class: 'spinner' }),
+      el('div', {}, text || '加载中…')
+    );
+  }
+
+  // 错误/警告态：红色卡片 + 文案 + 可选重试
+  function errorState(text, onRetry) {
+    const c = el('div', { class: 'error-state' },
+      el('span', { class: 'em-ic', style: 'color:var(--error);opacity:.6;' }, '⚠️'),
+      el('div', { class: 'em-title', style: 'color:var(--error);' }, text || '出错了')
+    );
+    if (onRetry) {
+      c.appendChild(el('button', { class: 'btn btn-secondary btn-sm', style: 'margin-top:10px;', onclick: onRetry }, '重试'));
+    }
+    return c;
+  }
+
+  // 骨架屏：列表加载占位，n=卡片数量
+  function skeletonState(n) {
+    const wrap = el('div', {});
+    for (let i = 0; i < (n || 3); i++) {
+      wrap.appendChild(el('div', { class: 'skeleton-card' },
+        el('div', { class: 'sk-head' },
+          el('div', { class: 'skeleton sk-avatar' }),
+          el('div', { style: 'flex:1;' },
+            el('div', { class: 'skeleton skeleton-line lg' }),
+            el('div', { class: 'skeleton skeleton-line sm' })
+          )
+        ),
+        el('div', { class: 'skeleton skeleton-line md' }),
+        el('div', { class: 'skeleton skeleton-line lg' })
+      ));
+    }
+    return wrap;
   }
 
   function tripCard(trip) {
@@ -474,6 +514,8 @@
       ['map', '🗺️ 地图'],
       ['cost', '💰 花费'],
       ['checklist', '✅ 清单'],
+      ['docs', '📋 证件'],
+      ['collab', '👥 协同'],
       ['timeline', '📜 时间线'],
       ['chart', '📊 图表']
     ];
@@ -488,6 +530,8 @@
     else if (activeTab === 'map') renderMapTab(app, trip);
     else if (activeTab === 'cost') renderCostTab(app, trip);
     else if (activeTab === 'checklist') renderChecklistTab(app, trip);
+    else if (activeTab === 'docs') renderDocsTab(app, trip);
+    else if (activeTab === 'collab') renderCollabTab(app, trip);
     else if (activeTab === 'timeline') renderTimelineTab(app, trip);
     else if (activeTab === 'chart') renderChartTab(app, trip);
   }
@@ -569,8 +613,298 @@
   }
 
   /* ====================================================
-     行程 Tab：按天切换卡片
+     16 证件提醒 Tab
      ==================================================== */
+  const DOC_META = {
+    passport: { label: '护照', icon: '📘' },
+    idcard: { label: '身份证', icon: '🪪' },
+    visa: { label: '签证', icon: '✈️' },
+    other: { label: '其他', icon: '📄' }
+  };
+  function renderDocsTab(app, trip) {
+    const docs = S.listDocuments(trip.id);
+
+    // 目的地签证提示卡
+    const dest = trip.destination || '';
+    const visaHint = el('div', { class: 'card visa-card' },
+      el('div', { class: 'card-head' },
+        el('div', { class: 'card-title' }, el('span', { class: 'ic' }, '🌍'), '签证提示'),
+        dest ? el('span', { class: 'caption' }, `目的地：${dest}`) : null
+      ),
+      dest ? el('p', { class: 'caption', style: 'margin:6px 0 0;' },
+        '出行前请确认目的地签证要求。多数国家要求护照剩余有效期 ≥ 6 个月，建议出发前 30 天办理。')
+        : el('p', { class: 'caption', style: 'margin:6px 0 0;color:var(--text-mute);' }, '尚未设置目的地，前往「编辑」补充。')
+    );
+    app.appendChild(visaHint);
+
+    // 概览统计
+    const expired = docs.filter(d => S.docStatus(d) === 'expired').length;
+    const soon = docs.filter(d => S.docStatus(d) === 'soon').length;
+    if (docs.length) {
+      app.appendChild(el('div', { class: 'docs-stat' },
+        el('span', { class: 'stat-pill valid' }, `有效 ${docs.length - expired - soon}`),
+        soon ? el('span', { class: 'stat-pill soon' }, `即将到期 ${soon}`) : null,
+        expired ? el('span', { class: 'stat-pill expired' }, `已过期 ${expired}`) : null
+      ));
+    }
+
+    // 证件列表
+    if (!docs.length) {
+      app.appendChild(emptyState('📋', '暂无证件', '添加护照、身份证、签证，到期前自动提醒', [
+        el('button', { class: 'btn btn-primary btn-sm', onclick: () => openDocModal(trip) }, '添加证件')
+      ]));
+      return;
+    }
+    docs.forEach(d => app.appendChild(docCard(trip, d)));
+
+    // 操作
+    app.appendChild(el('button', { class: 'btn btn-secondary btn-block', style: 'margin-top:12px;', onclick: () => openDocModal(trip) }, '＋ 添加证件'));
+
+    // 证件照片备份区
+    const photos = docs.filter(d => d.photo);
+    app.appendChild(el('div', { class: 'card', style: 'margin-top:16px;' },
+      el('div', { class: 'card-head' }, el('div', { class: 'card-title' }, el('span', { class: 'ic' }, '🖼️'), '证件照片备份'), el('span', { class: 'caption' }, `${photos.length}/${docs.length}`)),
+      photos.length
+        ? el('div', { class: 'photo-grid' }, photos.map(d => el('div', { class: 'photo-thumb', onclick: () => openDocModal(trip, d) }, el('img', { src: d.photo, alt: d.name }))))
+        : el('p', { class: 'caption', style: 'text-align:center;padding:16px 0;' }, '尚无证件照片备份，编辑证件可上传照片')
+    ));
+  }
+
+  function docCard(trip, d) {
+    const meta = DOC_META[d.type] || DOC_META.other;
+    const status = S.docStatus(d);
+    const statusMap = {
+      valid: { label: '有效', cls: 'tag-success' },
+      soon: { label: '即将到期', cls: 'tag-warning' },
+      expired: { label: '已过期', cls: 'tag-error' },
+      unknown: { label: '未设有效期', cls: 'tag-muted' }
+    };
+    const st = statusMap[status];
+    const card = el('div', { class: 'card doc-card status-' + status, onclick: () => openDocModal(trip, d) },
+      el('div', { class: 'doc-head' },
+        el('span', { class: 'doc-icon' }, meta.icon),
+        el('div', { class: 'doc-main' },
+          el('div', { class: 'doc-name' }, d.name || meta.label + (d.number ? ` · ${d.number.slice(-4).padStart(d.number.length, '•')}` : '')),
+          el('div', { class: 'caption' }, `${meta.label}${d.country ? ' · ' + d.country : ''}`)
+        ),
+        el('span', { class: 'tag ' + st.cls }, st.label)
+      ),
+      d.expiry ? el('div', { class: 'doc-foot' },
+        el('span', { class: 'caption' }, `有效期至 ${S.fmtDateCn(d.expiry)}`),
+        status === 'expired'
+          ? el('span', { class: 'doc-warn' }, '✕ 已过期，请尽快续办')
+          : (status === 'soon' ? el('span', { class: 'doc-warn', style: 'color:var(--warning);' }, '⚠ 即将到期') : null)
+      ) : null,
+      d.visaNote ? el('div', { class: 'caption', style: 'margin-top:6px;' }, '签证备注：' + d.visaNote) : null,
+      el('div', { class: 'doc-actions', onclick: (e) => e.stopPropagation() },
+        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openDocModal(trip, d) }, '编辑'),
+        el('button', { class: 'btn btn-ghost btn-sm', style: 'color:var(--error);', onclick: () => {
+          if (!confirm('删除该证件？')) return;
+          S.deleteDocument(trip.id, d.id); toast('已删除'); render();
+        } }, '删除')
+      )
+    );
+    return card;
+  }
+
+  function openDocModal(trip, doc) {
+    const isNew = !doc;
+    doc = doc || { type: 'passport', name: '', number: '', expiry: '', country: '', needVisa: false, visaNote: '', note: '', photo: '' };
+    const typeSel = el('div', { class: 'seg' });
+    Object.keys(DOC_META).forEach(k => {
+      typeSel.appendChild(el('button', {
+        class: 'seg-item' + (doc.type === k ? ' active' : ''),
+        onclick: (e) => {
+          $$('.seg-item', typeSel).forEach(b => b.classList.remove('active'));
+          e.currentTarget.classList.add('active');
+          window._docType = k;
+        }
+      }, DOC_META[k].icon + ' ' + DOC_META[k].label));
+    });
+    window._docType = doc.type;
+    const form = el('div', {},
+      field('证件类型', typeSel),
+      field('持有人/名称', el('input', { class: 'form-control', id: 'doc_name', value: doc.name || '', placeholder: '如：张三 护照' })),
+      el('div', { class: 'form-row' },
+        el('div', { style: 'flex:1;' }, field('证件号码', el('input', { class: 'form-control', id: 'doc_number', value: doc.number || '' }))),
+        el('div', { style: 'flex:1;' }, field('签发国家', el('input', { class: 'form-control', id: 'doc_country', value: doc.country || '' })))
+      ),
+      field('有效期至', el('input', { class: 'form-control', type: 'date', id: 'doc_expiry', value: doc.expiry || '' })),
+      el('label', { class: 'form-switch' },
+        el('input', { type: 'checkbox', id: 'doc_needVisa', checked: doc.needVisa ? 'checked' : null }),
+        el('span', {}, '需要办理签证')
+      ),
+      el('div', { id: 'doc_visa_wrap', style: (doc.needVisa ? '' : 'display:none;') + 'margin-top:8px;' },
+        field('签证备注', el('input', { class: 'form-control', id: 'doc_visaNote', value: doc.visaNote || '', placeholder: '如：免签 30 天 / 落地签 / 需提前申请' }))
+      ),
+      field('证件照片（URL 或本地上传）', el('input', { class: 'form-control', id: 'doc_photo', value: doc.photo || '', placeholder: '可粘贴图片 URL', onchange: (e) => {
+        const v = e.target.value;
+        const prev = $('#doc_photo_prev'); if (prev) prev.src = v;
+      } })),
+      doc.photo ? el('img', { id: 'doc_photo_prev', src: doc.photo, class: 'doc-preview', alt: '预览' }) : null,
+      field('备注', el('textarea', { class: 'form-control', id: 'doc_note', rows: 2 }, doc.note || ''))
+    );
+    // 切换签证输入显示
+    setTimeout(() => {
+      const cb = $('#doc_needVisa'), wrap = $('#doc_visa_wrap');
+      if (cb) cb.addEventListener('change', () => { wrap.style.display = cb.checked ? 'block' : 'none'; });
+    }, 0);
+    const foot = [
+      el('button', { class: 'btn btn-ghost', onclick: closeModal }, '取消'),
+      el('button', { class: 'btn btn-primary', onclick: () => {
+        const data = {
+          type: window._docType || 'passport',
+          name: $('#doc_name').value.trim(),
+          number: $('#doc_number').value.trim(),
+          country: $('#doc_country').value.trim(),
+          expiry: $('#doc_expiry').value,
+          needVisa: $('#doc_needVisa').checked,
+          visaNote: $('#doc_visaNote').value.trim(),
+          note: $('#doc_note').value.trim(),
+          photo: $('#doc_photo').value.trim()
+        };
+        if (isNew) S.addDocument(trip.id, data);
+        else S.updateDocument(trip.id, doc.id, data);
+        closeModal(); toast(isNew ? '已添加' : '已更新'); render();
+      } }, '保存')
+    ];
+    openModal(isNew ? '添加证件' : '编辑证件', form, { foot });
+  }
+
+  /* ====================================================
+     17 多人协同 Tab
+     ==================================================== */
+  function renderCollabTab(app, trip) {
+    const code = S.getInviteCode(trip.id);
+    // 邀请码卡：4 位大数字 + 复制 + 刷新
+    const codeCard = el('div', { class: 'card invite-card' },
+      el('div', { class: 'card-head' },
+        el('div', { class: 'card-title' }, el('span', { class: 'ic' }, '🔗'), '行程邀请码'),
+        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => {
+          S.regenInviteCode(trip.id); toast('已刷新邀请码'); render();
+        } }, '🔄 刷新')
+      ),
+      el('div', { class: 'invite-code' },
+        code.split('').map(ch => el('span', { class: 'ic-digit' }, ch))
+      ),
+      el('div', { class: 'invite-actions' },
+        el('button', { class: 'btn btn-primary btn-block', onclick: () => {
+          navigator.clipboard && navigator.clipboard.writeText(code);
+          toast('邀请码已复制：' + code);
+        } }, '📋 复制邀请码')
+      ),
+      el('p', { class: 'caption', style: 'text-align:center;margin-top:8px;' }, '将邀请码发给同伴，对方输入即可加入行程')
+    );
+    app.appendChild(codeCard);
+
+    // 成员列表（角色 / 权限切换）
+    const memCard = el('div', { class: 'card' },
+      el('div', { class: 'card-head' },
+        el('div', { class: 'card-title' }, el('span', { class: 'ic' }, '👥'), `成员 · ${trip.members.length}`),
+        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openMembersModal(trip) }, '管理')
+      )
+    );
+    const ROLE_META = {
+      owner: { label: '主理人', color: 'var(--accent)' },
+      editor: { label: '可编辑', color: 'var(--primary)' },
+      viewer: { label: '仅查看', color: 'var(--text-soft)' },
+      member: { label: '成员', color: 'var(--text-soft)' }
+    };
+    trip.members.forEach((m, i) => {
+      const role = m.role || (i === 0 ? 'owner' : 'member');
+      const meta = ROLE_META[role] || ROLE_META.member;
+      memCard.appendChild(el('div', { class: 'member-row' },
+        el('div', { class: 'avatar' }, (m.name || '?').slice(0, 1)),
+        el('div', { class: 'member-main' },
+          el('div', { class: 'member-name' }, m.name + (i === 0 ? '（我）' : '')),
+          el('span', { class: 'member-role', style: `color:${meta.color};` }, meta.label)
+        ),
+        i === 0 ? null : el('select', {
+          class: 'role-select',
+          onchange: (e) => { S.setMemberRole(trip.id, m.id, e.target.value); toast('已更新角色'); render(); }
+        }, Object.keys(ROLE_META).filter(r => r !== 'owner').map(r =>
+          el('option', Object.assign({ value: r }, role === r ? { selected: 'selected' } : {}), ROLE_META[r].label)
+        ))
+      ));
+    });
+    app.appendChild(memCard);
+
+    // 加入行程弹窗（演示）
+    app.appendChild(el('button', { class: 'btn btn-secondary btn-block', style: 'margin-top:12px;', onclick: () => openJoinModal(trip) }, '✨ 模拟「加入他人行程」'));
+
+    // 操作日志时间线
+    const logs = S.getLogs(trip.id);
+    const logCard = el('div', { class: 'card' },
+      el('div', { class: 'card-head' }, el('div', { class: 'card-title' }, el('span', { class: 'ic' }, '📜'), '操作日志'), el('span', { class: 'caption' }, `${logs.length} 条`))
+    );
+    if (!logs.length) {
+      logCard.appendChild(el('p', { class: 'caption', style: 'text-align:center;padding:16px 0;' }, '暂无操作记录'));
+    } else {
+      const tl = el('div', { class: 'log-timeline' });
+      logs.slice(0, 20).forEach(log => tl.appendChild(logNode(log)));
+      logCard.appendChild(tl);
+    }
+    app.appendChild(logCard);
+  }
+
+  function logNode(log) {
+    const meta = LOG_TYPE_META[log.type] || { icon: '•', label: log.text || '操作' };
+    return el('div', { class: 'log-node' },
+      el('div', { class: 'log-dot' }, meta.icon),
+      el('div', { class: 'log-body' },
+        el('div', { class: 'log-text' }, log.text || meta.label),
+        el('div', { class: 'caption' }, `${log.actor || '我'} · ${fmtRelative(log.time)}`)
+      )
+    );
+  }
+  const LOG_TYPE_META = {
+    role: { icon: '👥', label: '调整角色' },
+    add: { icon: '＋', label: '新增' },
+    edit: { icon: '✎', label: '编辑' },
+    del: { icon: '🗑', label: '删除' },
+    join: { icon: '🎉', label: '加入行程' }
+  };
+  function fmtRelative(ts) {
+    if (!ts) return '';
+    const diff = Date.now() - ts;
+    if (diff < 60000) return '刚刚';
+    if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
+    if (diff < 604800000) return Math.floor(diff / 86400000) + ' 天前';
+    return S.fmtDateCn(S.fmtDate(new Date(ts)));
+  }
+
+  function openJoinModal(trip) {
+    const form = el('div', {},
+      el('p', { class: 'caption', style: 'margin-bottom:12px;' }, '输入同伴分享的 4 位邀请码加入行程'),
+      el('div', { class: 'invite-input-row' },
+        el('input', { class: 'form-control invite-input', id: 'ji_1', maxlength: 1, oninput: () => focusNext('ji_1', 'ji_2') }),
+        el('input', { class: 'form-control invite-input', id: 'ji_2', maxlength: 1, oninput: () => focusNext('ji_2', 'ji_3') }),
+        el('input', { class: 'form-control invite-input', id: 'ji_3', maxlength: 1, oninput: () => focusNext('ji_3', 'ji_4') }),
+        el('input', { class: 'form-control invite-input', id: 'ji_4', maxlength: 1 })
+      ),
+      el('p', { class: 'caption', style: 'margin-top:12px;color:var(--text-mute);' }, '提示：当前为单机版演示，实际邀请码 = ' + S.getInviteCode(trip.id))
+    );
+    const foot = [
+      el('button', { class: 'btn btn-ghost', onclick: closeModal }, '取消'),
+      el('button', { class: 'btn btn-primary', onclick: () => {
+        const code = ['ji_1','ji_2','ji_3','ji_4'].map(id => ($('#' + id).value || '').toUpperCase()).join('');
+        if (code.length < 4) { toast('请输入完整的 4 位邀请码'); return; }
+        if (code === S.getInviteCode(trip.id)) {
+          S.logAction(trip, { type: 'join', text: '新成员加入行程' });
+          closeModal(); toast('加入成功（演示）'); render();
+        } else {
+          toast('邀请码错误');
+        }
+      } }, '加入行程')
+    ];
+    openModal('加入行程', form, { foot });
+  }
+  function focusNext(curId, nextId) {
+    const cur = $('#' + curId);
+    if (cur && cur.value.length === 1) { const n = $('#' + nextId); if (n) n.focus(); }
+  }
+
   let currentDayId = null;
 
   function renderItineraryTab(app, trip) {
@@ -579,6 +913,31 @@
       return;
     }
     if (!currentDayId || !trip.days.find(d => d.id === currentDayId)) currentDayId = trip.days[0].id;
+
+    // 顶部快捷入口行：交通/酒店/景点/花费/更多
+    const quickEntry = el('div', { class: 'quick-entry' });
+    const QUICKS = [
+      { icon: '🚄', label: '交通', tab: 'itinerary' },
+      { icon: '🏨', label: '酒店', tab: 'itinerary' },
+      { icon: '📍', label: '景点', tab: 'itinerary' },
+      { icon: '💰', label: '花费', tab: 'cost' },
+      { icon: '⋯', label: '更多', tab: null }
+    ];
+    QUICKS.forEach(q => {
+      quickEntry.appendChild(el('button', {
+        class: 'qe-item',
+        onclick: () => {
+          if (q.tab === 'cost') navigate('trip/' + trip.id + '/cost');
+          else if (q.tab === null) toast('更多功能：地图/清单/证件/协同/时间线/图表');
+          else {
+            // 滚动到对应区块
+            const target = $('.section-' + (q.label === '交通' ? 'transport' : (q.label === '酒店' ? 'hotel' : 'activities')));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }, el('span', { class: 'qe-icon' }, q.icon), el('span', { class: 'qe-label' }, q.label)));
+    });
+    app.appendChild(quickEntry);
 
     // 天切换器
     const switcher = el('div', { class: 'day-switcher' });
@@ -630,8 +989,8 @@
     return t;
   }
 
-  function sectionCard(title, icon, iconBg, content, addAction) {
-    const card = el('div', { class: 'card' });
+  function sectionCard(title, icon, iconBg, content, addAction, key) {
+    const card = el('div', { class: 'card' + (key ? ' section-' + key : '') });
     const head = el('div', { class: 'card-head' },
       el('h3', { class: 'card-title' }, el('span', { class: 'ic', style: `background:${iconBg}` }, icon), title)
     );
@@ -654,7 +1013,10 @@
         body.appendChild(el('div', { class: 'item-row' },
           el('div', { style: 'font-size:20px;' }, meta.icon),
           el('div', { class: 'item-main' },
-            el('div', { class: 'item-title' }, `${t.from || '?'} → ${t.to || '?'}`),
+            el('div', { class: 'item-title' },
+              `${t.from || '?'} → ${t.to || '?'}`,
+              t.delayed ? el('span', { class: 'tag tag-orange', style: 'margin-left:6px;' }, `延误 ${t.delayMins || '?'}min`) : null
+            ),
             el('div', { class: 'item-sub' }, `${meta.label} · ${t.departTime || '--'}-${t.arriveTime || '--'}${t.number ? ' · ' + t.number : ''}${t.note ? ' · ' + t.note : ''}`)
           ),
           t.cost ? el('div', { class: 'item-cost' }, money(t.cost)) : null,
@@ -664,7 +1026,7 @@
           )
         ));
       });
-    }, { label: '＋ 添加交通', fn: () => openTransportModal(trip, day, null) });
+    }, { label: '＋ 添加交通', fn: () => openTransportModal(trip, day, null) }, 'transport');
     return card;
   }
 
@@ -687,7 +1049,7 @@
           el('button', { class: 'btn btn-ghost btn-sm', onclick: () => { S.clearHotel(trip.id, day.id); toast('已清除'); render(); } }, '🗑')
         )
       ));
-    }, { label: '＋ 添加住宿', fn: () => openHotelModal(trip, day, null) });
+    }, { label: '＋ 添加住宿', fn: () => openHotelModal(trip, day, null) }, 'hotel');
     return card;
   }
 
@@ -697,31 +1059,76 @@
         body.appendChild(emptyState('📍', '添加游玩地点，可在地图查看并规划路线'));
         return;
       }
-      const list = el('div', { id: 'activityList' });
+      // 雨天提醒条（演示：基于活动 note 是否含「雨」字触发）
+      const hasRainNote = day.activities.some(a => (a.note || '').indexOf('雨') > -1);
+      if (hasRainNote) {
+        body.appendChild(el('div', { class: 'rain-hint' },
+          el('span', {}, '🌧️ 当日有雨天预报，建议带伞并调整室外活动顺序')
+        ));
+      }
+      // 分类筛选标签栏
+      const cats = ['all', ...Object.keys(CAT_META)];
+      const filterBar = el('div', { class: 'filter-bar' });
+      const listWrap = el('div', {});
       const sorted = day.activities.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
-      sorted.forEach((a, idx) => {
-        const meta = CAT_META[a.category] || CAT_META.other;
-        const row = el('div', { class: 'item-row', 'data-id': a.id },
-          el('div', { class: 'drag-handle', title: '拖拽排序' }, '⠿'),
-          el('div', { style: `width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;` }, String(idx + 1)),
-          el('div', { class: 'item-main' },
-            el('div', { class: 'item-title' }, a.name),
-            el('div', { class: 'item-sub' },
-              el('span', { class: 'cat-badge ' + meta.cls }, meta.label),
-              ` ${a.startTime || '--'}-${a.endTime || '--'}`,
-              a.address ? ` · ${a.address}` : '',
-              a.note ? ` · ${a.note}` : ''
+      function renderList(filter) {
+        listWrap.innerHTML = '';
+        const filtered = filter === 'all' ? sorted : sorted.filter(a => (a.category || 'attraction') === filter);
+        if (!filtered.length) { listWrap.appendChild(el('p', { class: 'caption', style: 'text-align:center;padding:12px 0;' }, '该分类暂无地点')); return; }
+        const list = el('div', { id: 'activityList' });
+        filtered.forEach((a, idx) => {
+          const meta = CAT_META[a.category] || CAT_META.other;
+          const row = el('div', { class: 'item-row activity-row', 'data-id': a.id },
+            el('div', { class: 'drag-handle', title: '拖拽排序' }, '⠿'),
+            el('div', { class: 'activity-num' }, String(idx + 1)),
+            el('div', { class: 'item-main' },
+              el('div', { class: 'item-title' }, a.name, (a.note || '').indexOf('雨') > -1 ? el('span', { class: 'rain-icon', title: '雨天' }, '🌧️') : null),
+              el('div', { class: 'item-sub' },
+                el('span', { class: 'cat-badge ' + meta.cls }, meta.label),
+                ` ${a.startTime || '--'}-${a.endTime || '--'}`,
+                a.address ? ` · ${a.address}` : '',
+                a.note ? ` · ${a.note}` : ''
+              )
+            ),
+            a.cost ? el('div', { class: 'item-cost' }, money(a.cost)) : null,
+            el('div', { class: 'item-actions' },
+              el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openActivityModal(trip, day, a) }, '编辑'),
+              el('button', { class: 'btn btn-ghost btn-sm', onclick: () => { S.deleteActivity(trip.id, day.id, a.id); toast('已删除'); render(); } }, '🗑')
             )
-          ),
-          a.cost ? el('div', { class: 'item-cost' }, money(a.cost)) : null,
-          el('div', { class: 'item-actions' },
-            el('button', { class: 'btn btn-ghost btn-sm', onclick: () => openActivityModal(trip, day, a) }, '编辑'),
-            el('button', { class: 'btn btn-ghost btn-sm', onclick: () => { S.deleteActivity(trip.id, day.id, a.id); toast('已删除'); render(); } }, '🗑')
-          )
-        );
-        list.appendChild(row);
+          );
+          list.appendChild(row);
+        });
+        listWrap.appendChild(list);
+        // 拖拽排序（仅在 all 视图生效）
+        if (filter === 'all' && window.Sortable) {
+          Sortable.create(list, {
+            handle: '.drag-handle', animation: 150,
+            onEnd: (evt) => {
+              const newOrder = Array.from(list.querySelectorAll('.item-row')).map(r => r.dataset.id);
+              S.reorderActivities(trip.id, day.id, newOrder);
+              toast('顺序已更新');
+              render();
+            }
+          });
+        }
+      }
+      cats.forEach((c, i) => {
+        const label = c === 'all' ? '全部' : CAT_META[c].label;
+        filterBar.appendChild(el('button', {
+          class: 'filter-chip' + (i === 0 ? ' active' : '')
+        }, label));
       });
-      body.appendChild(list);
+      // 切换筛选
+      filterBar.querySelectorAll('.filter-chip').forEach((btn, idx) => {
+        btn.addEventListener('click', () => {
+          filterBar.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          renderList(cats[idx]);
+        });
+      });
+      body.appendChild(filterBar);
+      renderList('all');
+      body.appendChild(listWrap);
 
       // 路线规划信息
       if (sorted.length >= 2) {
@@ -738,20 +1145,7 @@
           ));
         }
       }
-
-      // 拖拽排序
-      if (window.Sortable) {
-        Sortable.create(list, {
-          handle: '.drag-handle', animation: 150,
-          onEnd: (evt) => {
-            const newOrder = Array.from(list.querySelectorAll('.item-row')).map(r => r.dataset.id);
-            S.reorderActivities(trip.id, day.id, newOrder);
-            toast('顺序已更新');
-            render();
-          }
-        });
-      }
-    }, { label: '＋ 添加游玩地点', fn: () => openActivityModal(trip, day, null) });
+    }, { label: '＋ 添加游玩地点', fn: () => openActivityModal(trip, day, null) }, 'activities');
     return card;
   }
 
@@ -790,20 +1184,35 @@
     return card;
   }
 
-  function emptyState(icon, text) {
-    return el('div', { class: 'empty-state' },
-      el('span', { class: 'em-ic' }, icon), el('div', {}, text));
-  }
-
   /* ====================================================
      交通/酒店/活动/餐饮 编辑模态
      ==================================================== */
   function openTransportModal(trip, day, t) {
     const isNew = !t;
-    t = t || { type: 'flight', from: '', to: '', departTime: '', arriveTime: '', number: '', cost: '', note: '' };
-    const typeOpts = Object.keys(TRANSPORT_META).map(k => el('option', Object.assign({ value: k }, t.type === k ? { selected: 'selected' } : {}), TRANSPORT_META[k].label));
+    t = t || { type: 'flight', from: '', to: '', departTime: '', arriveTime: '', number: '', cost: '', note: '', delayed: false, delayMins: '' };
+    // 类型分段控制器（航班/高铁/大巴/租车/其他）
+    const typeSeg = el('div', { class: 'seg' });
+    Object.keys(TRANSPORT_META).forEach(k => {
+      const meta = TRANSPORT_META[k];
+      typeSeg.appendChild(el('button', {
+        class: 'seg-item' + (t.type === k ? ' active' : ''),
+        onclick: (e) => {
+          $$('.seg-item', typeSeg).forEach(b => b.classList.remove('active'));
+          e.currentTarget.classList.add('active');
+          window._trType = k;
+        }
+      }, meta.icon + ' ' + meta.label));
+    });
+    window._trType = t.type;
+    // 延误状态开关
+    const delayToggle = el('label', { class: 'form-switch' },
+      el('input', { type: 'checkbox', id: 't_delayed', checked: t.delayed ? 'checked' : null, onchange: () => {
+        const w = $('#t_delay_wrap'); if (w) w.style.display = $('#t_delayed').checked ? 'block' : 'none';
+      } }),
+      el('span', {}, '延误（开启后显示延误时长）')
+    );
     const form = el('div', {},
-      field('交通方式', el('select', { class: 'form-control', id: 't_type' }, ...typeOpts)),
+      field('交通方式', typeSeg),
       field('出发 / 到达', el('div', { class: 'form-row' },
         el('input', { class: 'form-control', id: 't_from', value: t.from || '', placeholder: '出发地' }),
         el('input', { class: 'form-control', id: 't_to', value: t.to || '', placeholder: '到达地' })
@@ -814,20 +1223,26 @@
       )),
       field('班次号', el('input', { class: 'form-control', id: 't_num', value: t.number || '', placeholder: '航班号/车次号' })),
       field('花费（元）', el('input', { class: 'form-control', type: 'number', id: 't_cost', value: t.cost || '', placeholder: '0' })),
+      delayToggle,
+      el('div', { id: 't_delay_wrap', style: (t.delayed ? '' : 'display:none;') + 'margin-bottom:12px;' },
+        field('延误时长（分钟）', el('input', { class: 'form-control', type: 'number', id: 't_delaymins', value: t.delayMins || '', placeholder: '如：30' }))
+      ),
       field('备注', el('input', { class: 'form-control', id: 't_note', value: t.note || '', placeholder: '行李、座位等' }))
     );
     const foot = [
       el('button', { class: 'btn btn-ghost', onclick: closeModal }, '取消'),
       el('button', { class: 'btn btn-primary', onclick: () => {
         const data = {
-          type: $('#t_type').value,
+          type: window._trType || t.type,
           from: $('#t_from').value.trim(),
           to: $('#t_to').value.trim(),
           departTime: $('#t_dep').value.trim(),
           arriveTime: $('#t_arr').value.trim(),
           number: $('#t_num').value.trim(),
           cost: $('#t_cost').value,
-          note: $('#t_note').value.trim()
+          note: $('#t_note').value.trim(),
+          delayed: $('#t_delayed').checked,
+          delayMins: $('#t_delaymins') ? $('#t_delaymins').value : ''
         };
         if (isNew) S.addTransport(trip.id, day.id, data);
         else S.updateTransport(trip.id, day.id, t.id, data);
@@ -1637,13 +2052,142 @@
     app.appendChild(el('div', { class: 'card' },
       el('div', { class: 'card-title', style: 'margin-bottom:10px;' }, '关于'),
       el('p', { class: 'caption' }, '旅途伴旅 · 旅行规划工具'),
-      el('p', { class: 'caption' }, '数据存储在本地浏览器，安全私密')
+      el('p', { class: 'caption' }, '数据存储在本地浏览器，安全私密'),
+      el('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:10px;', onclick: () => navigate('design-system') }, '🎨 查看设计系统')
     ));
   }
 
+  /* ====================================================
+     Design System 设计系统页
+     ==================================================== */
+  function renderDesignSystem(app) {
+    app.appendChild(el('div', { class: 'ds-hero' },
+      el('h1', {}, '设计系统'),
+      el('p', { class: 'caption' }, 'Figma 规范 · 移动端 375×812 · iOS 风格')
+    ));
+
+    // 1. 颜色 Tokens
+    const COLORS = [
+      { name: 'Primary 旅途蓝', hex: '#4A90D9', cls: 'ds-sw-primary' },
+      { name: 'Accent 日落橙', hex: '#FF8C42', cls: 'ds-sw-accent' },
+      { name: 'Background 背景', hex: '#F5F6FA', cls: 'ds-sw-bg' },
+      { name: 'Surface 卡片', hex: '#FFFFFF', cls: 'ds-sw-surface' },
+      { name: 'Text Primary', hex: '#1A1A2E', cls: 'ds-sw-text' },
+      { name: 'Text Secondary', hex: '#8A93A6', cls: 'ds-sw-text-soft' },
+      { name: 'Divider 分割', hex: '#E8ECF1', cls: 'ds-sw-divider' },
+      { name: 'Success 成功', hex: '#34C759', cls: 'ds-sw-success' },
+      { name: 'Error 错误', hex: '#FF3B30', cls: 'ds-sw-error' },
+      { name: 'Warning 警告', hex: '#FF9500', cls: 'ds-sw-warning' }
+    ];
+    app.appendChild(dsSection('01 颜色 Tokens', el('div', { class: 'ds-color-grid' },
+      COLORS.map(c => el('div', { class: 'ds-color' },
+        el('div', { class: 'ds-sw ' + c.cls }),
+        el('div', { class: 'ds-sw-name' }, c.name),
+        el('div', { class: 'ds-sw-hex' }, c.hex)
+      ))
+    )));
+
+    // 渐变封面
+    app.appendChild(dsSection('渐变封面', el('div', { class: 'ds-grad-cover' },
+      el('span', {}, '#4A90D9 → #FF8C42 线性渐变')
+    )));
+
+    // 2. 字体 Typography
+    app.appendChild(dsSection('02 字体 Typography', el('div', { class: 'card ds-typo' },
+      el('div', { class: 'ds-typo-row' }, el('span', { class: 'ds-typo-h1' }, 'H1 标题 22px Bold'), el('span', { class: 'caption' }, 'Heading')),
+      el('div', { class: 'ds-typo-row' }, el('span', { class: 'ds-typo-h2' }, 'H2 18px SemiBold'), el('span', { class: 'caption' }, 'Subheading')),
+      el('div', { class: 'ds-typo-row' }, el('span', { class: 'ds-typo-h3' }, 'H3 16px SemiBold'), el('span', { class: 'caption' }, 'Section Title')),
+      el('div', { class: 'ds-typo-row' }, el('span', { style: 'font-size:14px;' }, 'Body 14px Regular'), el('span', { class: 'caption' }, 'Body')),
+      el('div', { class: 'ds-typo-row' }, el('span', { class: 'caption' }, 'Caption 12px Regular'), el('span', { class: 'caption' }, 'Caption')),
+      el('div', { class: 'ds-typo-row' }, el('span', { class: 'ds-mono' }, '¥1,368.33'), el('span', { class: 'caption' }, '金额 DIN/SF Mono'))
+    )));
+
+    // 3. 圆角与阴影
+    app.appendChild(dsSection('03 圆角与阴影', el('div', { class: 'ds-radius-grid' },
+      el('div', { class: 'ds-radius-card' }, el('div', { class: 'ds-label' }, '12px 卡片')),
+      el('div', { class: 'ds-radius-pill' }, el('div', { class: 'ds-label' }, '22px 胶囊')),
+      el('div', { class: 'ds-radius-input' }, el('div', { class: 'ds-label' }, '8px 输入')),
+      el('div', { class: 'ds-radius-img' }, el('div', { class: 'ds-label' }, '8px 图片'))
+    )));
+
+    // 4. 组件 Components
+    app.appendChild(dsSection('04 按钮 Buttons', el('div', { class: 'ds-comp' },
+      el('button', { class: 'btn btn-primary' }, '主按钮'),
+      el('button', { class: 'btn btn-secondary' }, '次按钮'),
+      el('button', { class: 'btn btn-danger' }, '危险按钮'),
+      el('button', { class: 'btn btn-ghost' }, '幽灵按钮'),
+      el('button', { class: 'btn btn-primary btn-sm' }, '小按钮')
+    )));
+
+    app.appendChild(dsSection('05 标签 Tags/Badges', el('div', { class: 'ds-comp' },
+      el('span', { class: 'tag tag-blue' }, '交通'),
+      el('span', { class: 'tag tag-orange' }, '延误'),
+      el('span', { class: 'tag tag-green' }, '已支付'),
+      el('span', { class: 'tag tag-red' }, '已过期'),
+      el('span', { class: 'tag tag-purple' }, '酒店'),
+      el('span', { class: 'tag tag-gray' }, '未开始'),
+      el('span', { class: 'tag tag-success' }, '有效'),
+      el('span', { class: 'tag tag-warning' }, '即将到期'),
+      el('span', { class: 'tag tag-error' }, '已过期'),
+      el('span', { class: 'tag tag-muted' }, '未设置')
+    )));
+
+    app.appendChild(dsSection('06 进度条 Progress Bar', el('div', {},
+      el('div', { class: 'progress-bar', style: 'margin-bottom:8px;' }, el('div', { class: 'progress-fill', style: 'width:33%;' })),
+      el('div', { class: 'progress-bar', style: 'margin-bottom:8px;' }, el('div', { class: 'progress-fill', style: 'width:67%;' })),
+      el('div', { class: 'progress-bar' }, el('div', { class: 'progress-fill', style: 'width:100%;' }))
+    )));
+
+    app.appendChild(dsSection('07 输入框 Input', el('div', {},
+      field('Label 在左', el('input', { class: 'form-control', placeholder: '请输入' })),
+      field('聚焦态', el('input', { class: 'form-control', placeholder: '点击聚焦看主色边框', style: 'margin-top:8px;' }))
+    )));
+
+    app.appendChild(dsSection('08 时间线 Timeline', el('div', { class: 'log-timeline' },
+      logNode({ type: 'add', actor: '我', time: Date.now() - 3600000, text: '新增了交通' }),
+      logNode({ type: 'edit', actor: '小华', time: Date.now() - 7200000, text: '编辑了酒店' }),
+      logNode({ type: 'role', actor: '我', time: Date.now() - 86400000, text: '调整了成员角色' })
+    )));
+
+    app.appendChild(dsSection('09 状态 States', el('div', {},
+      el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:8px;' },
+        emptyState('📭', '空状态', '暂无数据'),
+        loadingState('加载中…'),
+        errorState('出错示例', () => toast('重试')),
+        el('div', { class: 'card', style: 'padding:16px;' },
+          el('div', { class: 'skeleton skeleton-line lg' }),
+          el('div', { class: 'skeleton skeleton-line md' }),
+          el('div', { class: 'skeleton skeleton-line sm' })
+        )
+      )
+    )));
+
+    app.appendChild(dsSection('10 卡片 Card', el('div', { class: 'card' },
+      el('div', { class: 'card-head' }, el('div', { class: 'card-title' }, '卡片标题'), el('span', { class: 'caption' }, '说明')),
+      el('p', { class: 'caption' }, '白底圆角轻阴影，含标题区/内容区/操作区')
+    )));
+
+    app.appendChild(dsSection('11 间距 Spacing', el('div', { class: 'card' },
+      el('div', { class: 'ds-sp-row' }, el('span', { class: 'ds-sp-box', style: 'width:16px;height:16px;' }), el('span', { class: 'caption' }, '16px 页面边距')),
+      el('div', { class: 'ds-sp-row' }, el('span', { class: 'ds-sp-box', style: 'width:16px;height:16px;' }), el('span', { class: 'caption' }, '16px 卡片内边距')),
+      el('div', { class: 'ds-sp-row' }, el('span', { class: 'ds-sp-box', style: 'width:8px;height:8px;' }), el('span', { class: 'caption' }, '8px 元素间距')),
+      el('div', { class: 'ds-sp-row' }, el('span', { class: 'ds-sp-box', style: 'width:16px;height:16px;' }), el('span', { class: 'caption' }, '16px 区块间距'))
+    )));
+
+    app.appendChild(el('p', { class: 'caption', style: 'text-align:center;padding:24px 0;color:var(--text-mute);' }, '— 旅途伴旅 Design System v1.0 —'));
+  }
+
+  function dsSection(title, content) {
+    return el('div', { class: 'ds-section' },
+      el('h2', { class: 'ds-section-title' }, title),
+      content
+    );
+  }
+
+  // 暴露给全局（TabBar onclick 用）—— 必须在 render() 之前，方便排查 init 错误
+  window.App = { navigate };
+  window.__DBG = { renderDocsTab, renderCollabTab, renderTrip, render, $, el, S };
+
   // 初始化
   render();
-
-  // 暴露给全局（TabBar onclick 用）
-  window.App = { navigate };
 })();
