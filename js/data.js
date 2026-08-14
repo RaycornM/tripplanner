@@ -262,6 +262,27 @@
     if (i >= 0) { trip.checklist.splice(i, 1); save(); return true; }
     return false;
   }
+  function getChecklistGroups(tripId) {
+    const trip = getTrip(tripId); if (!trip) return [];
+    const groups = {};
+    const ICON_MAP = { '证件': 'file-text', '电子': 'cpu', '衣物': 'shirt', '洗护': 'droplet', '健康': 'heart', '其他': 'package' };
+    trip.checklist.forEach(item => {
+      const cat = item.category || '通用';
+      if (!groups[cat]) {
+        groups[cat] = { id: 'g_' + cat, name: cat, icon: ICON_MAP[cat] || 'package', items: [] };
+      }
+      groups[cat].items.push(item);
+    });
+    return Object.values(groups);
+  }
+  function toggleChecklistItem(tripId, itemId) {
+    const trip = getTrip(tripId); if (!trip) return null;
+    const it = trip.checklist.find(c => c.id === itemId); if (!it) return null;
+    it.done = !it.done; save(); return it;
+  }
+  function removeChecklistItem(tripId, groupId, itemId) {
+    return deleteChecklistItem(tripId, itemId);
+  }
 
   // ---------- 自定义分摊 ----------
   function addSplit(tripId, data) {
@@ -514,7 +535,7 @@
     addActivity, updateActivity, deleteActivity, reorderActivities,
     addMeal, updateMeal, deleteMeal,
     addMember, removeMember,
-    addChecklistItem, updateChecklistItem, deleteChecklistItem,
+    addChecklistItem, updateChecklistItem, deleteChecklistItem, getChecklistGroups, toggleChecklistItem, removeChecklistItem,
     addSplit, deleteSplit,
     estimateCost, perPersonEstimate, actualCostByCategory, actualTotal, computeSettlement,
     listDocuments, addDocument, updateDocument, deleteDocument, docStatus,

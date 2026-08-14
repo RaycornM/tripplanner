@@ -34,19 +34,19 @@
     <!-- TabBar 底部导航 -->
     <nav class="tab-bar" id="tabBar">
       <button class="tab-item active" data-tab="trips" onclick="App.navigate('home')">
-        <span class="tab-icon">🧳</span>
+        <span class="tab-icon" id="tab-trips-ic"></span>
         <span>行程</span>
       </button>
       <button class="tab-item" data-tab="checklist" onclick="App.navigate('checklist')">
-        <span class="tab-icon">✅</span>
+        <span class="tab-icon" id="tab-checklist-ic"></span>
         <span>清单</span>
       </button>
       <button class="tab-item" data-tab="cost" onclick="App.navigate('cost')">
-        <span class="tab-icon">💰</span>
+        <span class="tab-icon" id="tab-cost-ic"></span>
         <span>记账</span>
       </button>
       <button class="tab-item" data-tab="me" onclick="App.navigate('me')">
-        <span class="tab-icon">👤</span>
+        <span class="tab-icon" id="tab-me-ic"></span>
         <span>我的</span>
       </button>
     </nav>
@@ -58,6 +58,7 @@
   <div id="toastRoot" class="toast-root"></div>
 
   <!-- 数据层 -->
+  <script src="js/icons.js"></script>
   <script src="js/data.js"></script>
   <script src="js/templates.js"></script>
   <!-- 应用逻辑 -->
