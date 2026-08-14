@@ -223,6 +223,7 @@
     if (window._currentChart) { try { window._currentChart.destroy(); } catch (e) {} window._currentChart = null; }
 
     updateFrame(route, params);
+    updateActiveNav(route);
 
     if (route === 'home') renderHome(app);
     else if (route === 'trip') renderTrip(app, params[0], params[1]);
@@ -3250,14 +3251,112 @@
   window.App = { navigate, openCreateTripModal };
   window.__DBG = { renderDocsTab, renderCollabTab, renderTrip, render, $, el, S, openCreateTripModal };
 
-  // 初始化 TabBar SVG 图标
+  // 初始化 TabBar / 侧边栏 SVG 图标 & 响应式 UI
   setTimeout(() => {
-    const map = { 'tab-trips-ic': 'map', 'tab-checklist-ic': 'package', 'tab-cost-ic': 'wallet', 'tab-me-ic': 'user' };
-    for (const [id, ic] of Object.entries(map)) {
+    // 底部 TabBar 图标
+    const tabMap = { 'tab-trips-ic': 'map', 'tab-checklist-ic': 'package', 'tab-cost-ic': 'wallet', 'tab-me-ic': 'user' };
+    for (const [id, ic] of Object.entries(tabMap)) {
       const el2 = document.getElementById(id);
       if (el2) el2.innerHTML = svgIcon(ic, 22);
     }
+    // 桌面端侧边栏图标
+    const dsMap = {
+      'ds-brand-ic': 'plane',
+      'ds-nav-trips': 'map',
+      'ds-nav-checklist': 'package',
+      'ds-nav-cost': 'wallet',
+      'ds-nav-explore': 'compass',
+      'ds-nav-tpl': 'layers',
+      'ds-nav-collab': 'users',
+      'ds-nav-notif': 'bell',
+      'ds-nav-ds': 'palette',
+      'ds-nav-me': 'user'
+    };
+    for (const [id, ic] of Object.entries(dsMap)) {
+      const el2 = document.getElementById(id);
+      if (el2) el2.innerHTML = svgIcon(ic, 20);
+    }
+    // 移动端菜单图标
+    const menuBtn = document.getElementById('mobileMenuBtn');
+    const menuIc = document.getElementById('mobile-menu-ic');
+    const overlay = document.getElementById('mobileOverlay');
+    const sidebar = document.getElementById('desktopSidebar');
+    if (menuIc) menuIc.innerHTML = svgIcon('menu', 20);
+    if (menuBtn && overlay && sidebar) {
+      const updateMenuBtnVisibility = () => {
+        // < 1024px 显示汉堡菜单按钮
+        if (window.innerWidth < 1024) {
+          menuBtn.style.display = '';
+          sidebar.style.position = 'fixed';
+          sidebar.style.left = '-280px';
+          sidebar.style.top = '0';
+          sidebar.style.height = '100vh';
+          sidebar.style.zIndex = '100';
+          sidebar.style.transition = 'left .25s ease';
+        } else {
+          menuBtn.style.display = 'none';
+          sidebar.style.position = '';
+          sidebar.style.left = '';
+          sidebar.style.top = '';
+          sidebar.style.height = '';
+          sidebar.style.zIndex = '';
+          sidebar.style.transition = '';
+          overlay.classList.remove('show');
+        }
+      };
+      updateMenuBtnVisibility();
+      window.addEventListener('resize', updateMenuBtnVisibility);
+      menuBtn.addEventListener('click', () => {
+        sidebar.style.left = '0';
+        overlay.classList.add('show');
+      });
+      overlay.addEventListener('click', () => {
+        sidebar.style.left = '-280px';
+        overlay.classList.remove('show');
+      });
+      // 点击侧边栏导航自动收起 (移动端)
+      sidebar.querySelectorAll('.ds-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (window.innerWidth < 1024) {
+            sidebar.style.left = '-280px';
+            overlay.classList.remove('show');
+          }
+        });
+      });
+    }
   }, 100);
+
+  // 同步侧边栏和 TabBar 的 active 状态
+  function updateActiveNav(route) {
+    const tabRouteMap = {
+      'home': 'trips',
+      'checklist': 'checklist',
+      'cost': 'cost',
+      'me': 'me',
+      'trip': 'trips',
+      'explore': 'explore',
+      'templates': 'templates',
+      'co-planning': 'co-planning',
+      'notifications': 'notifications',
+      'design-system': 'design-system'
+    };
+    const activeTabKey = tabRouteMap[route] || 'trips';
+    // 更新 TabBar (底部)
+    document.querySelectorAll('#tabBar .tab-item').forEach(btn => {
+      const key = btn.getAttribute('data-tab');
+      btn.classList.toggle('active', key === activeTabKey);
+    });
+    // 更新桌面端侧边栏
+    document.querySelectorAll('.ds-nav-item').forEach(btn => {
+      const key = btn.getAttribute('data-route');
+      const shouldActive = (key === route) ||
+        (route === 'trip' && key === 'home') ||
+        (route === 'destination-guide' && key === 'explore') ||
+        (route === 'map' && key === 'home') ||
+        (route === 'search' && key === 'home');
+      btn.classList.toggle('active', shouldActive);
+    });
+  }
 
   // 初始化
   render();

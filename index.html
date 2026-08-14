@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="theme-color" content="#4A90D9" />
@@ -17,9 +17,75 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
 <body>
-  <div class="phone-frame">
+  <!-- 桌面端侧边栏（>=1024px 显示，移动端隐藏） -->
+  <aside class="desktop-sidebar" id="desktopSidebar">
+    <div class="ds-brand">
+      <div class="ds-brand-icon">
+        <span class="ic-svg" id="ds-brand-ic"></span>
+      </div>
+      <div class="ds-brand-text">
+        <h1>旅途伴旅</h1>
+        <p>TripPlanner</p>
+      </div>
+    </div>
+
+    <nav class="ds-nav">
+      <div class="ds-nav-section">
+        <span class="ds-nav-label">主菜单</span>
+        <button class="ds-nav-item active" data-route="home" onclick="App.navigate('home')">
+          <span class="ds-nav-icon" id="ds-nav-trips"></span>
+          <span class="ds-nav-text">行程</span>
+        </button>
+        <button class="ds-nav-item" data-route="checklist" onclick="App.navigate('checklist')">
+          <span class="ds-nav-icon" id="ds-nav-checklist"></span>
+          <span class="ds-nav-text">打包清单</span>
+        </button>
+        <button class="ds-nav-item" data-route="cost" onclick="App.navigate('cost')">
+          <span class="ds-nav-icon" id="ds-nav-cost"></span>
+          <span class="ds-nav-text">花费记账</span>
+        </button>
+        <button class="ds-nav-item" data-route="explore" onclick="App.navigate('explore')">
+          <span class="ds-nav-icon" id="ds-nav-explore"></span>
+          <span class="ds-nav-text">探索目的地</span>
+        </button>
+        <button class="ds-nav-item" data-route="templates" onclick="App.navigate('templates')">
+          <span class="ds-nav-icon" id="ds-nav-tpl"></span>
+          <span class="ds-nav-text">行程模板</span>
+        </button>
+      </div>
+      <div class="ds-nav-section">
+        <span class="ds-nav-label">协同与工具</span>
+        <button class="ds-nav-item" data-route="co-planning" onclick="App.navigate('co-planning')">
+          <span class="ds-nav-icon" id="ds-nav-collab"></span>
+          <span class="ds-nav-text">协同大厅</span>
+        </button>
+        <button class="ds-nav-item" data-route="notifications" onclick="App.navigate('notifications')">
+          <span class="ds-nav-icon" id="ds-nav-notif"></span>
+          <span class="ds-nav-text">通知中心</span>
+          <span class="ds-nav-badge">3</span>
+        </button>
+        <button class="ds-nav-item" data-route="design-system" onclick="App.navigate('design-system')">
+          <span class="ds-nav-icon" id="ds-nav-ds"></span>
+          <span class="ds-nav-text">设计系统</span>
+        </button>
+      </div>
+    </nav>
+
+    <div class="ds-footer">
+      <button class="ds-nav-item" data-route="me" onclick="App.navigate('me')" style="width:100%;">
+        <span class="ds-nav-icon" id="ds-nav-me"></span>
+        <span class="ds-nav-text">我的</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- 主内容区（桌面端 + 移动端共用） -->
+  <div class="app-shell">
     <!-- Navigation Bar 顶部导航（标题/按钮由 app.js 动态控制） -->
     <header class="nav-bar" id="navBar">
+      <button class="nav-btn mobile-only" id="mobileMenuBtn" style="display:none;">
+        <span class="ic-svg" id="mobile-menu-ic"></span>
+      </button>
       <div class="nav-left" id="navLeft"></div>
       <div class="nav-title" id="navTitle">旅途伴旅</div>
       <div class="nav-right" id="navRight"></div>
@@ -31,8 +97,8 @@
     <!-- 悬浮新建按钮（首页显示，由 app.js 控制） -->
     <button class="fab" id="fab" style="display:none;">＋</button>
 
-    <!-- TabBar 底部导航 -->
-    <nav class="tab-bar" id="tabBar">
+    <!-- TabBar 底部导航（移动端显示，桌面端隐藏） -->
+    <nav class="tab-bar mobile-only" id="tabBar">
       <button class="tab-item active" data-tab="trips" onclick="App.navigate('home')">
         <span class="tab-icon" id="tab-trips-ic"></span>
         <span>行程</span>
@@ -56,6 +122,9 @@
   <div id="modalRoot"></div>
   <!-- Toast 容器 -->
   <div id="toastRoot" class="toast-root"></div>
+
+  <!-- 移动端遮罩层（侧边栏弹出时） -->
+  <div class="mobile-overlay" id="mobileOverlay"></div>
 
   <!-- 数据层 -->
   <script src="js/icons.js"></script>
