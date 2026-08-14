@@ -31,7 +31,8 @@
     const appendKid = (c) => {
       if (c == null || c === false) return;
       if (Array.isArray(c)) c.forEach(appendKid);
-      else node.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+      else if (typeof c === 'string' || typeof c === 'number') node.appendChild(document.createTextNode(String(c)));
+      else node.appendChild(c);
     };
     kids.forEach(appendKid);
     return node;
