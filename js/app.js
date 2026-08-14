@@ -90,17 +90,69 @@
     return { route: parts[0] || 'home', params: parts.slice(1) };
   }
   function navigate(hash) { location.hash = hash; }
+
+  /* 框架控制：NavBar 标题/按钮、TabBar active、FAB 显示 */
+  function updateFrame(route, params) {
+    const navLeft = $('#navLeft'); const navTitle = $('#navTitle'); const navRight = $('#navRight');
+    const fab = $('#fab'); const tabBar = $('#tabBar');
+    navLeft.innerHTML = ''; navRight.innerHTML = '';
+    // 行程详情等子页：显示返回 + 隐藏 TabBar
+    const isSubPage = (route === 'trip' || route === 'templates');
+    if (isSubPage) {
+      tabBar.style.display = 'none';
+      fab.style.display = 'none';
+      navLeft.appendChild(el('button', { class: 'nav-btn', onclick: () => navigate('home') }, '‹'));
+    } else {
+      tabBar.style.display = 'flex';
+      // TabBar active 切换
+      $$('.tab-item', tabBar).forEach(t => {
+        const tab = t.dataset.tab;
+        const active = (route === 'home' && tab === 'trips') ||
+                       (route === 'checklist' && tab === 'checklist') ||
+                       (route === 'cost' && tab === 'cost') ||
+                       (route === 'me' && tab === 'me');
+        t.classList.toggle('active', active);
+      });
+    }
+    // NavBar 标题与右侧操作
+    const titles = {
+      home: '', checklist: '出行清单', cost: '花费统计', me: '我的',
+      templates: '行程模板', trip: ''
+    };
+    navTitle.textContent = titles[route] || '';
+    // 首页右侧：导入导出隐藏到「我的」，首页留新建快捷
+    if (route === 'home') {
+      navRight.appendChild(el('button', { class: 'nav-btn', onclick: () => navigate('templates'), title: '模板' }, '📋'));
+    }
+    // FAB 仅首页显示
+    fab.style.display = (route === 'home') ? 'grid' : 'none';
+    if (route === 'home') {
+      fab.onclick = () => openCreateTripModal();
+    }
+    // 行程详情标题
+    if (route === 'trip' && params && params[0]) {
+      const trip = S.getTrip(params[0]);
+      if (trip) navTitle.textContent = (trip.emoji || '🧳') + ' ' + trip.name;
+      navRight.appendChild(el('button', { class: 'nav-btn', onclick: () => openEditTripModal(trip), title: '编辑' }, '✎'));
+    }
+  }
+
   function render() {
     const { route, params } = parseHash();
     const app = $('#app');
     app.innerHTML = '';
-    // 销毁旧地图
+    // 销毁旧地图/图表
     if (window._currentMap) { try { window._currentMap.remove(); } catch (e) {} window._currentMap = null; }
     if (window._currentChart) { try { window._currentChart.destroy(); } catch (e) {} window._currentChart = null; }
+
+    updateFrame(route, params);
 
     if (route === 'home') renderHome(app);
     else if (route === 'trip') renderTrip(app, params[0], params[1]);
     else if (route === 'templates') renderTemplates(app);
+    else if (route === 'checklist') renderChecklistHub(app);
+    else if (route === 'cost') renderCostHub(app);
+    else if (route === 'me') renderMe(app);
     else renderHome(app);
   }
   window.addEventListener('hashchange', render);
@@ -111,69 +163,90 @@
   function renderHome(app) {
     const trips = S.listTrips();
 
-    const head = el('div', {},
-      el('h1', { class: 'page-title' }, '我的旅行'),
-      el('p', { class: 'page-sub' }, '规划你的下一次出行 · 记录每一段旅程')
-    );
-    app.appendChild(head);
+    app.appendChild(el('div', { class: 'greeting' },
+      el('p', { class: 'g-hi' }, '你好，旅人'),
+      el('h1', { class: 'g-name' }, '我的旅行')
+    ));
 
-    // 快捷操作
-    const quickRow = el('div', { class: 'section-head' },
-      el('h2', { class: 'section-title' }, '行程'),
-      el('div', { style: 'display:flex;gap:8px;' },
-        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => navigate('templates') }, '📋 行程模板'),
-        el('button', { class: 'btn btn-primary btn-sm', onclick: () => openCreateTripModal() }, '＋ 新建行程')
-      )
-    );
-    app.appendChild(quickRow);
-
-    const grid = el('div', { class: 'grid' });
+    const list = el('div', { class: 'trip-list' });
 
     if (trips.length === 0) {
-      app.appendChild(el('div', { class: 'card empty-state' },
-        el('span', { class: 'em-ic' }, '🧳'),
-        el('div', {}, '还没有行程，点击「新建行程」开始规划，或从模板创建'),
-        el('div', { style: 'margin-top:14px;display:flex;gap:8px;justify-content:center;' },
-          el('button', { class: 'btn btn-primary', onclick: () => openCreateTripModal() }, '＋ 新建行程'),
-          el('button', { class: 'btn btn-ghost', onclick: () => navigate('templates') }, '浏览模板')
-        )
-      ));
+      app.appendChild(emptyState('🧳', '还没有行程', '点击右下角按钮新建行程，或从模板快速开始', [
+        el('button', { class: 'btn btn-primary btn-sm', onclick: () => openCreateTripModal() }, '新建行程'),
+        el('button', { class: 'btn btn-ghost btn-sm', onclick: () => navigate('templates') }, '浏览模板')
+      ]));
       return;
     }
 
-    trips.forEach(trip => grid.appendChild(tripCard(trip)));
-    // 新建卡片
-    grid.appendChild(el('div', { class: 'new-card', onclick: () => openCreateTripModal() },
+    trips.forEach(trip => list.appendChild(tripCard(trip)));
+    list.appendChild(el('div', { class: 'new-card', onclick: () => openCreateTripModal() },
       el('div', { class: 'plus' }, '＋'),
       el('div', {}, '新建行程')
     ));
-    app.appendChild(grid);
+    app.appendChild(list);
+  }
+
+  function emptyState(icon, title, sub, actions) {
+    const c = el('div', { class: 'empty-state' },
+      el('span', { class: 'em-ic' }, icon),
+      el('div', { class: 'em-title' }, title),
+      el('div', { class: 'em-sub' }, sub)
+    );
+    if (actions && actions.length) {
+      const w = el('div', { style: 'display:flex;gap:8px;justify-content:center;' });
+      actions.forEach(b => w.appendChild(b));
+      c.appendChild(w);
+    }
+    return c;
   }
 
   function tripCard(trip) {
     const est = S.estimateCost(trip);
     const days = trip.days.length;
+    const today = S.todayStr();
+    let status = '未开始';
+    if (today >= trip.startDate && today <= trip.endDate) status = '进行中';
+    else if (today > trip.endDate) status = '已结束';
+    // 进度
+    let progress = 0;
+    if (days) {
+      const ref = today < trip.startDate ? trip.startDate : (today > trip.endDate ? trip.endDate : today);
+      progress = Math.min(100, Math.round((S.daysBetween(trip.startDate, ref) / days) * 100));
+    }
+    // 封面
     const cover = el('div', { class: 'trip-cover' });
-    cover.innerHTML = `<div class="cover-grad" style="background:${COVER_GRADS[trip.coverColor % COVER_GRADS.length]}"></div>
-      <span class="cover-emoji">${trip.emoji || '🧳'}</span>
-      <span class="trip-dates">${trip.startDate || '未定'} ${days ? '· ' + days + '天' : ''}</span>`;
-
-    const body = el('div', { class: 'trip-body' },
-      el('h3', { class: 'trip-name' }, trip.name),
-      el('div', { class: 'trip-meta' }, trip.destination || '自由行程'),
-      el('div', { class: 'trip-stats' },
-        el('span', {}, `📅 ${days}天`),
-        el('span', {}, `👥 ${trip.members.length}人`),
-        el('span', {}, `💰 预估 ${money(est)}`)
+    cover.innerHTML = `<div class="cover-grad"></div>
+      <div class="cover-top">
+        <span class="cover-emoji">${trip.emoji || '🧳'}</span>
+        <span class="trip-status">${status}</span>
+      </div>
+      <div class="trip-name-cover">${trip.name}</div>`;
+    // body
+    const meta = el('div', { class: 'trip-meta-row' },
+      el('span', {}, `📅 ${trip.startDate || '未定'}${days ? ' · ' + days + '天' : ''}`),
+      el('span', {}, `📍 ${trip.destination || '自由'}`)
+    );
+    const prog = el('div', { class: 'trip-progress' },
+      el('div', { class: 'tp-label' },
+        el('span', {}, status === '进行中' ? `行程进度 ${progress}%` : `共 ${days} 天`),
+        el('span', {}, `👥 ${trip.members.length}人`)
+      ),
+      el('div', { class: 'progress-bar' },
+        el('div', { class: 'progress-fill', style: `width:${progress}%` })
       )
     );
-    const actions = el('div', { class: 'trip-card-actions' },
-      el('button', { class: 'btn btn-ghost btn-sm', onclick: (e) => { e.stopPropagation(); navigate('trip/' + trip.id); } }, '查看'),
-      el('button', { class: 'btn btn-ghost btn-sm', onclick: (e) => { e.stopPropagation(); confirmDeleteTrip(trip); } }, '删除')
+    // 头像堆叠
+    const avatars = el('div', { class: 'avatar-stack' });
+    trip.members.slice(0, 4).forEach(m => {
+      avatars.appendChild(el('div', { class: 'avatar' }, (m.name || '?').slice(0, 1)));
+    });
+    if (trip.members.length > 4) avatars.appendChild(el('span', { class: 'avatar-more' }, `+${trip.members.length - 4}`));
+    const foot = el('div', { class: 'trip-foot' },
+      avatars,
+      el('div', { class: 'trip-cost' }, money(est), el('small', {}, ' · 预估'))
     );
-
-    const card = el('div', { class: 'trip-card', onclick: () => navigate('trip/' + trip.id) },
-      cover, body, actions);
+    const body = el('div', { class: 'trip-body' }, meta, prog, foot);
+    const card = el('div', { class: 'trip-card', onclick: () => navigate('trip/' + trip.id) }, cover, body);
     return card;
   }
 
@@ -309,7 +382,7 @@
      模板库
      ==================================================== */
   function renderTemplates(app) {
-    app.appendChild(el('a', { class: 'back-link', href: '#home' }, '← 返回我的旅行'));
+
     app.appendChild(el('h1', { class: 'page-title' }, '行程模板'));
     app.appendChild(el('p', { class: 'page-sub' }, '选择一个模板快速开始，套用后可自由修改'));
 
@@ -368,7 +441,7 @@
     if (!trip) { toast('行程不存在'); navigate('home'); return; }
 
     activeTab = activeTab || 'itinerary';
-    app.appendChild(el('a', { class: 'back-link', href: '#home' }, '← 返回我的旅行'));
+
 
     // 头部
     const header = el('div', { class: 'trip-header' });
@@ -1481,36 +1554,96 @@
     }
   }
 
-  /* ====================================================
-     导入导出
-     ==================================================== */
-  $('#exportBtn').addEventListener('click', () => {
-    const data = S.exportAll();
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `tripplanner_backup_${S.todayStr()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('已导出备份');
-  });
-  $('#importInput').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        S.importAll(ev.target.result);
-        toast('导入成功');
-        render();
-      } catch (err) { toast('导入失败：' + err.message); }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  });
+  /* 导入导出功能已移至「我的」页面（renderMe） */
 
-  $('#logo').addEventListener('click', (e) => { e.preventDefault(); navigate('home'); });
+  /* ====================================================
+     清单中心（聚合所有行程的清单）
+     ==================================================== */
+  function renderChecklistHub(app) {
+    const trips = S.listTrips();
+    if (!trips.length) { app.appendChild(emptyState('✅', '还没有清单', '创建行程后可管理出行清单')); return; }
+    trips.forEach(trip => {
+      const done = trip.checklist.filter(c => c.done).length;
+      const total = trip.checklist.length;
+      const pct = total ? Math.round(done / total * 100) : 0;
+      app.appendChild(el('div', { class: 'card', onclick: () => navigate('trip/' + trip.id + '/checklist') },
+        el('div', { class: 'card-head' },
+          el('div', { class: 'card-title' }, el('span', { class: 'ic' }, '🧳'), trip.name),
+          el('span', { class: 'caption' }, `${done}/${total}`)
+        ),
+        el('div', { class: 'progress-bar' }, el('div', { class: 'progress-fill', style: `width:${pct}%` }))
+      ));
+    });
+  }
+
+  /* ====================================================
+     花费中心（聚合所有行程花费统计）
+     ==================================================== */
+  function renderCostHub(app) {
+    const trips = S.listTrips();
+    if (!trips.length) { app.appendChild(emptyState('💰', '还没有花费', '创建行程后可记账统计')); return; }
+    let grandTotal = 0;
+    const summary = el('div', { class: 'cost-box' },
+      el('div', { class: 'cb-label' }, '全部行程总花费'),
+      el('div', { class: 'cb-value actual' }, '¥0')
+    );
+    app.appendChild(summary);
+    trips.forEach(trip => {
+      const total = S.actualTotal(trip);
+      grandTotal += total;
+      const per = trip.members.length ? Math.round(total / trip.members.length) : 0;
+      app.appendChild(el('div', { class: 'card', onclick: () => navigate('trip/' + trip.id + '/cost') },
+        el('div', { class: 'card-head' },
+          el('div', { class: 'card-title' }, el('span', { class: 'ic' }, (trip.emoji||'🧳')), trip.name),
+          el('span', { class: 'caption' }, `${trip.members.length}人`)
+        ),
+        el('div', { class: 'trip-foot' },
+          el('span', { class: 'text-soft', style: 'font-size:13px;' }, '总花费'),
+          el('span', { class: 'trip-cost' }, money(total))
+        ),
+        el('div', { class: 'text-soft', style: 'font-size:12px;margin-top:6px;' }, `人均 ${money(per)}`)
+      ));
+    });
+    summary.querySelector('.cb-value').textContent = money(grandTotal);
+  }
+
+  /* ====================================================
+     我的（设置 / 导入导出 / 关于）
+     ==================================================== */
+  function renderMe(app) {
+    const trips = S.listTrips();
+    const totalCost = trips.reduce((s, t) => s + S.actualTotal(t), 0);
+    app.appendChild(el('div', { class: 'trip-header' },
+      el('h1', {}, '👋 旅人'),
+      el('div', { class: 'sub' }, `已记录 ${trips.length} 段旅程 · 累计 ${money(totalCost)}`)
+    ));
+    app.appendChild(el('div', { class: 'card' },
+      el('div', { class: 'card-title', style: 'margin-bottom:14px;' }, '数据管理'),
+      el('button', { class: 'btn btn-secondary btn-block', style: 'margin-bottom:8px;', onclick: () => {
+        const blob = new Blob([S.exportAll()], { type: 'application/json' });
+        const a = el('a', { href: URL.createObjectURL(blob), download: 'tripplanner-backup-' + S.todayStr() + '.json' });
+        a.click();
+        toast('已导出备份');
+      } }, '📤 导出备份'),
+      el('label', { class: 'btn btn-ghost btn-block', style: 'margin-bottom:8px;' }, '📥 导入备份',
+        el('input', { type: 'file', accept: 'application/json', hidden: true, onchange: (e) => {
+          const f = e.target.files[0]; if (!f) return;
+          const r = new FileReader();
+          r.onload = () => { try { S.importAll(r.result); toast('导入成功'); render(); } catch (err) { toast('导入失败：' + err.message); } };
+          r.readAsText(f);
+        } })
+      )
+    ));
+    app.appendChild(el('div', { class: 'card' },
+      el('div', { class: 'card-title', style: 'margin-bottom:10px;' }, '关于'),
+      el('p', { class: 'caption' }, '旅途伴旅 · 旅行规划工具'),
+      el('p', { class: 'caption' }, '数据存储在本地浏览器，安全私密')
+    ));
+  }
 
   // 初始化
   render();
+
+  // 暴露给全局（TabBar onclick 用）
+  window.App = { navigate };
 })();

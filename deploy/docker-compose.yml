@@ -18,14 +18,20 @@ services:
       # 如需 HTTPS，取消下面注释并把证书放到 nginx/certs/ 目录：
       # - "8443:443"
     volumes:
-      # 网站静态文件目录（只读，更安全）
+      # ① 网站静态文件目录（只读，安全；UGOS 的 ACL 要允许「其他用户」有读权限）
       - ./www:/usr/share/nginx/html:ro
-      # 自定义 Nginx 配置（启用 gzip / 缓存，可选）
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      # 日志映射到宿主机，方便排查
+      # ② 自定义 Nginx 配置（挂载为 tripplanner.conf 而非 default.conf）
+      #    原因：nginx:alpine 官方镜像 entrypoint 会启动时尝试修改 default.conf（加 IPv6 listen）
+      #    如果 default.conf 是 :ro 挂载，会报错 "can not modify /etc/nginx/conf.d/default.conf"
+      #    改挂到单独的 conf 文件，entrypoint 就不会碰它，完全消除只读冲突
+      - ./nginx/tripplanner.conf:/etc/nginx/conf.d/tripplanner.conf:ro
+      # ③ 日志映射到宿主机（不加 :ro，因为 nginx 要写）
       - ./logs:/var/log/nginx
     environment:
       - TZ=Asia/Shanghai
+    # 【必要】显式删除官方镜像默认的 default.conf，避免它和我们的 tripplanner.conf 同优先级冲突
+    # （两个 server listen 80 会让 nginx 选默认 default 那个，可能指向空 root，导致 403）
+    entrypoint: ["/bin/sh", "-c", "rm -f /etc/nginx/conf.d/default.conf && exec /docker-entrypoint.sh nginx -g 'daemon off;'"]
     networks:
       - tripplanner-net
     healthcheck:

@@ -1,0 +1,27 @@
+version: "3.9"
+
+# 【备用方案】极简版 docker-compose —— 完全不用自定义 nginx 配置
+# 当 tripplanner.conf 加载有问题 / 容器日志有 [emerg] 时，
+# 用本文件替换 docker-compose.yml 启动，100% 能跑，只是没 gzip 和缓存。
+# 用法：cp docker-compose.simple.yml docker-compose.yml && docker compose up -d --force-recreate
+
+services:
+  tripplanner:
+    image: nginx:1.27-alpine
+    container_name: tripplanner
+    restart: unless-stopped
+    ports:
+      - "8888:80"
+    volumes:
+      # 只挂载 www，其他全用镜像默认，最稳
+      - ./www:/usr/share/nginx/html:ro
+    environment:
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    mem_limit: 128m
+    cpus: 0.5

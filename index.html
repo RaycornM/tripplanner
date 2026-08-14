@@ -2,8 +2,11 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>旅行规划 · TripPlanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#4A90D9" />
+  <title>旅途伴旅 · TripPlanner</title>
   <link rel="stylesheet" href="styles.css" />
   <!-- Leaflet 地图 -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -14,22 +17,40 @@
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 </head>
 <body>
-  <header class="app-header">
-    <div class="header-inner">
-      <a href="#" class="logo" id="logo">
-        <span class="logo-icon">✈</span>
-        <span class="logo-text">TripPlanner</span>
-      </a>
-      <nav class="header-actions">
-        <button class="btn btn-ghost" id="exportBtn" title="导出备份">导出</button>
-        <label class="btn btn-ghost" title="导入备份">导入
-          <input type="file" id="importInput" accept="application/json" hidden />
-        </label>
-      </nav>
-    </div>
-  </header>
+  <div class="phone-frame">
+    <!-- Navigation Bar 顶部导航（标题/按钮由 app.js 动态控制） -->
+    <header class="nav-bar" id="navBar">
+      <div class="nav-left" id="navLeft"></div>
+      <div class="nav-title" id="navTitle">旅途伴旅</div>
+      <div class="nav-right" id="navRight"></div>
+    </header>
 
-  <main id="app" class="app-main"></main>
+    <!-- 页面内容区（app.js 渲染处） -->
+    <main id="app" class="app-main page-pad"></main>
+
+    <!-- 悬浮新建按钮（首页显示，由 app.js 控制） -->
+    <button class="fab" id="fab" style="display:none;">＋</button>
+
+    <!-- TabBar 底部导航 -->
+    <nav class="tab-bar" id="tabBar">
+      <button class="tab-item active" data-tab="trips" onclick="App.navigate('home')">
+        <span class="tab-icon">🧳</span>
+        <span>行程</span>
+      </button>
+      <button class="tab-item" data-tab="checklist" onclick="App.navigate('checklist')">
+        <span class="tab-icon">✅</span>
+        <span>清单</span>
+      </button>
+      <button class="tab-item" data-tab="cost" onclick="App.navigate('cost')">
+        <span class="tab-icon">💰</span>
+        <span>记账</span>
+      </button>
+      <button class="tab-item" data-tab="me" onclick="App.navigate('me')">
+        <span class="tab-icon">👤</span>
+        <span>我的</span>
+      </button>
+    </nav>
+  </div>
 
   <!-- 模态框容器 -->
   <div id="modalRoot"></div>
