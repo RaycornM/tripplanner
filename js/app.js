@@ -2728,85 +2728,323 @@
      我的（设置 / 导入导出 / 关于）
      ==================================================== */
   function renderMe(app) {
+    const profile = S.getProfile();
     const trips = S.listTrips();
     const totalCost = trips.reduce((s, t) => s + S.actualTotal(t), 0);
     const totalDays = trips.reduce((s, t) => s + t.days.length, 0);
     const totalCountries = new Set();
     trips.forEach(t => { if (t.destination) totalCountries.add(t.destination); });
 
+    // 顶部个人介绍 (杂志感·衬线大字)
     const profileHeader = el('div', { class: 'profile-header' },
-      el('div', { class: 'profile-avatar' }, el('span', { html: svgIcon('user', 40), class: 'ic-svg', style: 'color:var(--primary);' })),
-      el('div', { class: 'profile-name' }, '旅行达人'),
-      el('div', { class: 'profile-since' }, 'Member since 2024')
+      el('div', { class: 'profile-avatar-wrap' },
+        el('div', { class: 'profile-avatar' }, profile.avatar || '我'),
+        el('button', { class: 'profile-edit', onclick: () => openProfileEditModal() },
+          el('span', { html: svgIcon('edit-2', 14), class: 'ic-svg' }),
+          '编辑'
+        )
+      ),
+      el('h2', { class: 'profile-name' }, profile.name || '旅行的人'),
+      el('p', { class: 'profile-bio' }, profile.bio || '添加一句自我介绍，让朋友更了解你'),
+      el('div', { class: 'profile-meta' },
+        profile.location ? el('span', {},
+          el('span', { html: svgIcon('map-pin', 12), class: 'ic-svg' }),
+          profile.location
+        ) : null,
+        el('span', {},
+          el('span', { html: svgIcon('calendar', 12), class: 'ic-svg' }),
+          '加入于 ' + (profile.since || '2024')
+        )
+      )
     );
     app.appendChild(profileHeader);
 
+    // 数据统计 (三栏)
     const stats = el('div', { class: 'profile-stats' },
-      el('div', { class: 'stat-card' },
+      el('div', { class: 'stat-card stat-card-minimal' },
         el('div', { class: 'stat-num' }, String(trips.length)),
         el('div', { class: 'stat-label' }, '行程')
       ),
-      el('div', { class: 'stat-card' },
+      el('div', { class: 'stat-card stat-card-minimal' },
         el('div', { class: 'stat-num' }, String(totalCountries.size)),
         el('div', { class: 'stat-label' }, '目的地')
       ),
-      el('div', { class: 'stat-card' },
+      el('div', { class: 'stat-card stat-card-minimal' },
         el('div', { class: 'stat-num' }, String(totalDays)),
         el('div', { class: 'stat-label' }, '天数')
+      ),
+      el('div', { class: 'stat-card stat-card-minimal' },
+        el('div', { class: 'stat-num' }, S.num(totalCost) >= 10000 ? (S.num(totalCost)/10000).toFixed(1) + 'w' : S.num(totalCost).toFixed(0)),
+        el('div', { class: 'stat-label' }, '总花费')
       )
     );
     app.appendChild(stats);
 
+    // 友圈
+    const friends = S.listFriends();
+    const friendsSection = el('div', { class: 'friends-section' },
+      el('div', { class: 'section-hd' },
+        el('h2', {}, '旅友'),
+        el('span', { class: 'see-all', onclick: () => navigate('co-planning') },
+          el('span', {}, '查看全部'),
+          el('span', { html: svgIcon('chevron-right', 12), class: 'ic-svg' })
+        )
+      ),
+      el('div', { class: 'friends-list' },
+        ...friends.slice(0, 8).map(f => el('div', { class: 'friend-item', onclick: () => toast('查看 ' + f.name + ' 的资料') },
+          el('div', { class: 'friend-avatar' }, f.avatar || f.name[0]),
+          el('div', { class: 'friend-name' }, f.name)
+        )),
+        el('div', { class: 'friend-item friend-add', onclick: () => openAddFriendModal() },
+          el('div', { class: 'friend-avatar' }, el('span', { html: svgIcon('plus', 18), class: 'ic-svg' })),
+          el('div', { class: 'friend-name' }, '邀请')
+        )
+      )
+    );
+    app.appendChild(friendsSection);
+
+    // 设置列表
+    app.appendChild(el('div', { class: 'section-hd' },
+      el('h2', {}, '设置')
+    ));
     const settingsList = el('div', { class: 'settings-list' },
       el('div', { class: 'settings-item', onclick: () => navigate('explore') },
-        el('span', { html: svgIcon('bookmark', 20), class: 'ic-svg' }),
+        el('span', { html: svgIcon('bookmark', 18), class: 'ic-svg' }),
         el('span', { class: 's-label' }, '我的收藏目的地'),
-        el('span', { html: svgIcon('chevron-right', 16), class: 'ic-svg s-chevron' })
+        el('span', { html: svgIcon('chevron-right', 14), class: 'ic-svg s-chevron' })
       ),
-      el('div', { class: 'settings-item' },
-        el('span', { html: svgIcon('settings', 20), class: 'ic-svg' }),
-        el('span', { class: 's-label' }, '旅行偏好设置'),
-        el('span', { html: svgIcon('chevron-right', 16), class: 'ic-svg s-chevron' })
+      el('div', { class: 'settings-item', onclick: () => openPreferencesModal() },
+        el('span', { html: svgIcon('sliders', 18), class: 'ic-svg' }),
+        el('span', { class: 's-label' }, '旅行偏好'),
+        el('span', { html: svgIcon('chevron-right', 14), class: 'ic-svg s-chevron' })
       ),
-      el('div', { class: 'settings-item' },
-        el('span', { html: svgIcon('dollar-sign', 20), class: 'ic-svg' }),
-        el('span', { class: 's-label' }, '货币设置'),
-        el('span', { html: svgIcon('chevron-right', 16), class: 'ic-svg s-chevron' })
+      el('div', { class: 'settings-item', onclick: () => openPrivacyModal() },
+        el('span', { html: svgIcon('shield', 18), class: 'ic-svg' }),
+        el('span', { class: 's-label' }, '隐私与可见性'),
+        el('span', { html: svgIcon('chevron-right', 14), class: 'ic-svg s-chevron' })
       ),
       el('div', { class: 'settings-item', onclick: () => navigate('notifications') },
-        el('span', { html: svgIcon('bell', 20), class: 'ic-svg' }),
+        el('span', { html: svgIcon('bell', 18), class: 'ic-svg' }),
         el('span', { class: 's-label' }, '通知设置'),
-        el('span', { html: svgIcon('chevron-right', 16), class: 'ic-svg s-chevron' })
-      ),
-      el('div', { class: 'settings-item', onclick: () => navigate('design-system') },
-        el('span', { html: svgIcon('info', 20), class: 'ic-svg' }),
-        el('span', { class: 's-label' }, '关于旅途伴旅'),
-        el('span', { html: svgIcon('chevron-right', 16), class: 'ic-svg s-chevron' })
+        el('span', { html: svgIcon('chevron-right', 14), class: 'ic-svg s-chevron' })
       )
     );
     app.appendChild(settingsList);
 
+    // 数据管理
+    app.appendChild(el('div', { class: 'section-hd' },
+      el('h2', {}, '数据')
+    ));
     const dataMgmt = el('div', { class: 'settings-list' },
       el('div', { class: 'settings-item', onclick: () => {
         const blob = new Blob([S.exportAll()], { type: 'application/json' });
         const a = el('a', { href: URL.createObjectURL(blob), download: 'tripplanner-backup-' + S.todayStr() + '.json' });
         a.click(); toast('已导出备份');
       } },
-        el('span', { html: svgIcon('file', 20), class: 'ic-svg' }),
+        el('span', { html: svgIcon('download', 18), class: 'ic-svg' }),
         el('span', { class: 's-label' }, '导出数据备份'),
-        el('span', { html: svgIcon('chevron-right', 16), class: 'ic-svg s-chevron' })
+        el('span', { html: svgIcon('chevron-right', 14), class: 'ic-svg s-chevron' })
       ),
-      el('div', { class: 'settings-item' },
-        el('span', { html: svgIcon('log-in', 20), class: 'ic-svg' }),
+      el('div', { class: 'settings-item', onclick: () => {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.json';
+        input.onchange = (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            try {
+              S.importAll(reader.result);
+              toast('导入成功'); render();
+            } catch (err) { toast('导入失败：' + err.message); }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      } },
+        el('span', { html: svgIcon('upload', 18), class: 'ic-svg' }),
         el('span', { class: 's-label' }, '导入数据备份'),
-        el('span', { html: svgIcon('chevron-right', 16), class: 'ic-svg s-chevron' })
+        el('span', { html: svgIcon('chevron-right', 14), class: 'ic-svg s-chevron' })
       )
     );
     app.appendChild(dataMgmt);
 
-    app.appendChild(el('div', { style: 'text-align:center;margin:32px 0;' },
-      el('button', { class: 'btn btn-danger', onclick: () => { toast('已退出登录（演示）'); } }, '退出登录')
+    app.appendChild(el('div', { style: 'text-align:center;margin:48px 0 24px;color:var(--text-mute);font-size:12px;letter-spacing:0.2em;text-transform:uppercase;' },
+      '旅途伴旅 · v3.0 · Wabi-Sabi Design'
     ));
+  }
+
+  // 打开个人编辑模态框
+  function openProfileEditModal() {
+    const profile = S.getProfile();
+    const body = el('div', {},
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '昵称'),
+        el('input', { class: 'form-control', id: 'profName', value: profile.name || '', placeholder: '你希望被如何称呼' })
+      ),
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '头像（单字/字母）'),
+        el('input', { class: 'form-control', id: 'profAvatar', value: profile.avatar || '', maxlength: '2', placeholder: '我 / T / R' })
+      ),
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '所在城市'),
+        el('input', { class: 'form-control', id: 'profLoc', value: profile.location || '', placeholder: '例：东京' })
+      ),
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '自我介绍'),
+        el('textarea', { class: 'form-control', id: 'profBio', placeholder: '一句话介绍自己' }, profile.bio || '')
+      )
+    );
+    const foot = [
+      el('button', { class: 'btn btn-ghost', onclick: closeModal }, '取消'),
+      el('button', { class: 'btn btn-primary', onclick: () => {
+        S.updateProfile({
+          name: $('#profName').value.trim() || '旅行的人',
+          avatar: $('#profAvatar').value.trim(),
+          location: $('#profLoc').value.trim(),
+          bio: $('#profBio').value.trim()
+        });
+        closeModal(); toast('已保存'); render();
+      } }, '保存')
+    ];
+    openModal('编辑个人资料', body, { foot });
+  }
+
+  // 旅行偏好
+  function openPreferencesModal() {
+    const p = S.getPreferences();
+    const body = el('div', {},
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '旅行风格'),
+        el('div', { class: 'chip-group' },
+          ...['休闲', '深度', '冒险', '美食', '购物', '文化', '自然', '摄影'].map(s => {
+            const active = (p.styles || []).includes(s);
+            return el('button', { class: 'chip' + (active ? ' active' : ''), onclick: (e) => {
+              e.currentTarget.classList.toggle('active');
+            }}, s);
+          })
+        )
+      ),
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '默认货币'),
+        el('select', { class: 'form-control', id: 'prefCurrency' },
+          ...['CNY', 'JPY', 'USD', 'EUR', 'GBP', 'THB', 'KRW'].map(c =>
+            el('option', { value: c, selected: (p.currency === c) ? 'selected' : null }, c)
+          )
+        )
+      ),
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '常旅客计划'),
+        el('input', { class: 'form-control', id: 'prefLoyalty', value: p.loyalty || '', placeholder: '例：ANA / 携程钻石' })
+      )
+    );
+    const foot = [
+      el('button', { class: 'btn btn-ghost', onclick: closeModal }, '取消'),
+      el('button', { class: 'btn btn-primary', onclick: () => {
+        const styles = Array.from(document.querySelectorAll('.modal .chip.active')).map(c => c.textContent);
+        S.updatePreferences({
+          styles,
+          currency: $('#prefCurrency').value,
+          loyalty: $('#prefLoyalty').value.trim()
+        });
+        closeModal(); toast('偏好已保存'); render();
+      } }, '保存')
+    ];
+    openModal('旅行偏好', body, { foot });
+  }
+
+  // 隐私设置
+  function openPrivacyModal() {
+    const p = S.getPrivacy();
+    const body = el('div', {},
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '行程可见性'),
+        el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;' },
+          ...[
+            { v: 'public', l: '公开' },
+            { v: 'friends', l: '仅旅友' },
+            { v: 'private', l: '仅自己' }
+          ].map(o => el('button', {
+            class: 'chip' + ((p.tripVisibility || 'friends') === o.v ? ' active' : ''),
+            'data-v': o.v,
+            onclick: function() {
+              document.querySelectorAll('[data-v]').forEach(b => b.classList.remove('active'));
+              this.classList.add('active');
+            }
+          }, o.l))
+        )
+      ),
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '是否允许'),
+        el('div', { class: 'setting-toggle' },
+          el('span', {}, '旅友邀请我加入行程'),
+          el('label', { class: 'switch' },
+            el('input', { type: 'checkbox', id: 'privInvite', checked: p.allowInvite ? 'checked' : null }),
+            el('span', { class: 'slider' })
+          )
+        ),
+        el('div', { class: 'setting-toggle' },
+          el('span', {}, '陌生人搜索到我'),
+          el('label', { class: 'switch' },
+            el('input', { type: 'checkbox', id: 'privSearch', checked: p.allowSearch ? 'checked' : null }),
+            el('span', { class: 'slider' })
+          )
+        ),
+        el('div', { class: 'setting-toggle' },
+          el('span', {}, '显示真实姓名'),
+          el('label', { class: 'switch' },
+            el('input', { type: 'checkbox', id: 'privRealName', checked: p.showRealName ? 'checked' : null }),
+            el('span', { class: 'slider' })
+          )
+        )
+      ),
+      el('div', { class: 'form-group' },
+        el('label', { class: 'form-label' }, '数据保留'),
+        el('select', { class: 'form-control', id: 'privRetention' },
+          ...[
+            { v: 'forever', l: '永久保留' },
+            { v: '3y', l: '3 年后自动归档' },
+            { v: '1y', l: '1 年后自动归档' }
+          ].map(o => el('option', { value: o.v, selected: p.retention === o.v ? 'selected' : null }, o.l))
+        )
+      )
+    );
+    const foot = [
+      el('button', { class: 'btn btn-ghost', onclick: closeModal }, '取消'),
+      el('button', { class: 'btn btn-primary', onclick: () => {
+        const vis = document.querySelector('[data-v].active');
+        S.updatePrivacy({
+          tripVisibility: vis ? vis.getAttribute('data-v') : 'friends',
+          allowInvite: $('#privInvite').checked,
+          allowSearch: $('#privSearch').checked,
+          showRealName: $('#privRealName').checked,
+          retention: $('#privRetention').value
+        });
+        closeModal(); toast('隐私设置已保存'); render();
+      } }, '保存')
+    ];
+    openModal('隐私与可见性', body, { foot });
+  }
+
+  // 邀请旅友
+  function openAddFriendModal() {
+    const code = S.generateInviteCode();
+    const body = el('div', { style: 'text-align:center;' },
+      el('p', { style: 'color:var(--text-soft);margin-bottom:20px;' }, '将以下邀请码分享给你的朋友，他们可在「协同大厅」中输入此码加入你的圈子。'),
+      el('div', { class: 'invite-code' },
+        ...code.split('').map(c => el('span', { class: 'invite-digit' }, c))
+      ),
+      el('button', { class: 'btn btn-ghost btn-block', style: 'margin-top:20px;', onclick: () => {
+        try { navigator.clipboard.writeText(code); toast('已复制邀请码'); } catch (e) { toast('复制失败'); }
+      } },
+        el('span', { html: svgIcon('copy', 14), class: 'ic-svg' }),
+        '复制邀请码'
+      )
+    );
+    const foot = [
+      el('button', { class: 'btn btn-primary btn-block', onclick: closeModal }, '完成')
+    ];
+    openModal('邀请旅友', body, { foot });
   }
 
   /* ====================================================
@@ -3358,6 +3596,17 @@
       btn.classList.toggle('active', shouldActive);
     });
   }
+
+  // 初始化示例数据（仅当用户首次访问且无旅友时）
+  (function initSamples() {
+    const friends = S.listFriends();
+    if (!friends || friends.length === 0) {
+      S.addFriend({ name: '林夏', avatar: '夏' });
+      S.addFriend({ name: 'Yuki', avatar: 'Y' });
+      S.addFriend({ name: '陈默', avatar: '默' });
+      S.addFriend({ name: 'Mia', avatar: 'M' });
+    }
+  })();
 
   // 初始化
   render();

@@ -8,7 +8,114 @@
 
   // 默认空数据结构
   function emptyState() {
-    return { trips: [], version: 1 };
+    return {
+      trips: [],
+      profile: defaultProfile(),
+      preferences: defaultPreferences(),
+      privacy: defaultPrivacy(),
+      friends: [],
+      version: 1
+    };
+  }
+
+  // ---------- 用户资料 ----------
+  function defaultProfile() {
+    return {
+      name: '',
+      avatar: '',
+      location: '',
+      bio: '',
+      since: new Date().getFullYear().toString()
+    };
+  }
+  function getProfile() {
+    if (!state.profile) state.profile = defaultProfile();
+    return state.profile;
+  }
+  function updateProfile(patch) {
+    state.profile = Object.assign(getProfile(), patch);
+    save();
+    return state.profile;
+  }
+
+  // ---------- 旅行偏好 ----------
+  function defaultPreferences() {
+    return {
+      styles: [],
+      currency: 'CNY',
+      loyalty: ''
+    };
+  }
+  function getPreferences() {
+    if (!state.preferences) state.preferences = defaultPreferences();
+    return state.preferences;
+  }
+  function updatePreferences(patch) {
+    state.preferences = Object.assign(getPreferences(), patch);
+    save();
+    return state.preferences;
+  }
+
+  // ---------- 隐私设置 ----------
+  function defaultPrivacy() {
+    return {
+      tripVisibility: 'friends', // public / friends / private
+      allowInvite: true,
+      allowSearch: false,
+      showRealName: false,
+      retention: 'forever' // forever / 3y / 1y
+    };
+  }
+  function getPrivacy() {
+    if (!state.privacy) state.privacy = defaultPrivacy();
+    return state.privacy;
+  }
+  function updatePrivacy(patch) {
+    state.privacy = Object.assign(getPrivacy(), patch);
+    save();
+    return state.privacy;
+  }
+
+  // ---------- 旅友 ----------
+  function listFriends() {
+    if (!state.friends) state.friends = [];
+    return state.friends;
+  }
+  function addFriend(friend) {
+    if (!state.friends) state.friends = [];
+    const f = Object.assign({
+      id: uid('f'),
+      name: friend.name || '旅友',
+      avatar: friend.avatar || '',
+      joinedAt: Date.now()
+    }, friend);
+    state.friends.push(f);
+    save();
+    return f;
+  }
+  function removeFriend(id) {
+    if (!state.friends) return false;
+    const i = state.friends.findIndex(f => f.id === id);
+    if (i >= 0) { state.friends.splice(i, 1); save(); return true; }
+    return false;
+  }
+  function updateFriend(id, patch) {
+    if (!state.friends) return null;
+    const f = state.friends.find(x => x.id === id);
+    if (!f) return null;
+    Object.assign(f, patch);
+    save();
+    return f;
+  }
+
+  // ---------- 6 位邀请码（小写大写字母+数字，去掉易混字符） ----------
+  function generateInviteCode() {
+    const src = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += src.charAt(Math.floor(Math.random() * src.length));
+    }
+    return code;
   }
 
   let state = load();
@@ -19,6 +126,11 @@
       if (!raw) return emptyState();
       const parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.trips)) return emptyState();
+      // 兼容旧数据：补齐缺失字段
+      if (!parsed.profile) parsed.profile = defaultProfile();
+      if (!parsed.preferences) parsed.preferences = defaultPreferences();
+      if (!parsed.privacy) parsed.privacy = defaultPrivacy();
+      if (!Array.isArray(parsed.friends)) parsed.friends = [];
       return parsed;
     } catch (e) {
       console.warn('数据读取失败，重置为空', e);
@@ -540,6 +652,11 @@
     estimateCost, perPersonEstimate, actualCostByCategory, actualTotal, computeSettlement,
     listDocuments, addDocument, updateDocument, deleteDocument, docStatus,
     getInviteCode, regenInviteCode, setMemberRole, logAction, getLogs,
+    getProfile, updateProfile,
+    getPreferences, updatePreferences,
+    getPrivacy, updatePrivacy,
+    listFriends, addFriend, removeFriend, updateFriend,
+    generateInviteCode,
     exportAll, importAll, createFromTemplate
   };
 
